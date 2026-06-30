@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Diagrama E-R - Chatbot de Capacitación ERP</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #2c2c2a;
+    --text-secondary: #5f5e5a;
+    --border: #d3d1c7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .header {
+    max-width: 1100px;
+    margin: 0 auto 24px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  p.subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+  .diagram-wrapper {
+    max-width: 1400px;
+    margin: 0 auto;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    background: #fff;
+  }
+  #erd {
+    min-width: 1100px;
+  }
+  #erd svg {
+    width: 100% !important;
+    height: auto !important;
+    max-width: none !important;
+  }
+  .legend {
+    max-width: 1100px;
+    margin: 24px auto 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .legend strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Diagrama Entidad-Relación — Chatbot de capacitación ERP</h1>
+  <p class="subtitle">Modelo de datos propuesto para Supabase (PostgreSQL + pgvector)</p>
+</div>
+
+<div class="diagram-wrapper">
+  <div id="erd"></div>
+</div>
+
+<div class="legend">
+  <strong>Notas de implementación:</strong><br>
+  · La tabla CHUNK usa pgvector (columna tipo <code>vector</code>) nativo en Supabase/PostgreSQL para almacenar los embeddings del RAG, sin necesidad de un vector store externo.<br>
+  · DOCUMENTO separa visibilidad (privado/compartido, elegido por el usuario) de estado_moderacion (resultado del filtro automático vía LLM).<br>
+  · EVALUACION es la plantilla; INTENTO_EVALUACION registra cada vez que un usuario la responde, permitiendo múltiples intentos por usuario.
+</div>
+
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  themeVariables: {
+    fontSize: '14px',
+    fontFamily: '-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+    primaryColor: '#E6F1FB',
+    primaryBorderColor: '#185FA5',
+    primaryTextColor: '#0C447C',
+    lineColor: '#73726c',
+    textColor: '#2c2c2a',
+    attributeBackgroundColorOdd: '#F8F8F6',
+    attributeBackgroundColorEven: '#FFFFFF'
+  },
+});
+
+const definition = `erDiagram
+  USUARIO ||--o{ DOCUMENTO : sube
+  USUARIO ||--o{ SESION_CHAT : inicia
+  USUARIO ||--o{ INTENTO_EVALUACION : realiza
+  DOCUMENTO ||--o{ CHUNK : se_fragmenta_en
+  TEMA ||--o{ DOCUMENTO : pertenece_a
+  TEMA ||--o{ EVALUACION : pertenece_a
+  SESION_CHAT ||--o{ MENSAJE : contiene
+  EVALUACION ||--o{ PREGUNTA : contiene
+  INTENTO_EVALUACION ||--o{ RESPUESTA_USUARIO : registra
+  PREGUNTA ||--o{ RESPUESTA_USUARIO : responde_a
+
+  USUARIO {
+    uuid id PK
+    string nombre
+    string correo
+    string password_hash
+    string rol
+    timestamp creado_en
+  }
+  TEMA {
+    uuid id PK
+    string nombre
+    string descripcion
+    boolean es_predefinido
+  }
+  DOCUMENTO {
+    uuid id PK
+    uuid usuario_id FK
+    uuid tema_id FK
+    string nombre_archivo
+    string formato
+    string visibilidad
+    string estado_moderacion
+    timestamp subido_en
+  }
+  CHUNK {
+    uuid id PK
+    uuid documento_id FK
+    text contenido
+    vector embedding
+    int orden
+  }
+  SESION_CHAT {
+    uuid id PK
+    uuid usuario_id FK
+    uuid tema_id FK
+    timestamp iniciada_en
+  }
+  MENSAJE {
+    uuid id PK
+    uuid sesion_id FK
+    string rol_emisor
+    text contenido
+    timestamp enviado_en
+  }
+  EVALUACION {
+    uuid id PK
+    uuid tema_id FK
+    string titulo
+    timestamp generada_en
+  }
+  PREGUNTA {
+    uuid id PK
+    uuid evaluacion_id FK
+    string tipo
+    text enunciado
+    text opciones
+    text respuesta_correcta
+  }
+  INTENTO_EVALUACION {
+    uuid id PK
+    uuid usuario_id FK
+    uuid evaluacion_id FK
+    float puntaje_total
+    timestamp completado_en
+  }
+  RESPUESTA_USUARIO {
+    uuid id PK
+    uuid intento_id FK
+    uuid pregunta_id FK
+    text respuesta_dada
+    float puntaje_obtenido
+    text feedback_llm
+  }
+`;
+
+const { svg } = await mermaid.render('erd-svg', definition);
+document.getElementById('erd').innerHTML = svg;
+</script>
+
+</body>
+</html>
