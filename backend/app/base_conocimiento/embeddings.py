@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -18,10 +19,18 @@ def _get_model() -> SentenceTransformer:
     return _model
 
 
-def generar_embedding(texto: str) -> list[float]:
-    """Genera un vector de 384 dimensiones para un texto."""
+@functools.lru_cache(maxsize=256)
+def _embedding_cached(texto: str) -> tuple[float, ...]:
+    """Cache LRU de hasta 256 queries distintas (≈ 256 × 384 × 4B ≈ 400 KB).
+    Guarda como tupla (inmutable) para que lru_cache no comparta el objeto con callers."""
     vector: np.ndarray = _get_model().encode(texto, convert_to_numpy=True)
-    return vector.tolist()
+    return tuple(vector.tolist())
+
+
+def generar_embedding(texto: str) -> list[float]:
+    """Genera un vector de 384 dimensiones para un texto.
+    Las queries repetidas se resuelven desde caché en memoria (~0ms vs ~200ms)."""
+    return list(_embedding_cached(texto))
 
 
 def generar_embeddings(textos: list[str]) -> list[list[float]]:
