@@ -61,3 +61,65 @@ Vectores iguales: True
 Objetos distintos: True (copia segura)
 ```
 ✅
+
+---
+
+## Bloque 2 — Seguridad (RNF-04, RNF-05, RNF-06, RNF-07, RNF-08)
+
+### Verificaciones (sin cambios de código)
+
+**Historial de Git — ningún secreto commiteado (RNF-05)**
+
+`git log --all --full-history -- "**/.env"` devolvió 3 commits, todos sobre `backend/.env.example` (valores vacíos). Los archivos `backend/.env` y `frontend/.env.local` con valores reales nunca aparecen en el historial. ✅
+
+**`service_role` solo en backend (RNF-05/06)**
+
+`grep -r "service_role"` sobre `frontend/` → 0 resultados. Solo aparece en:
+- `backend/app/core/config.py` (lectura desde variable de entorno)
+- `backend/app/core/supabase_client.py` (instancia del cliente)
+No está hardcodeado en ningún lado. ✅
+
+**JWT requerido en todos los endpoints de datos (RNF-06)**
+
+Auditados los 6 routers. Todos los endpoints que devuelven o modifican datos de usuario tienen `Depends(get_current_user_id)`. El único endpoint público es `GET /health`. ✅
+
+**Contraseñas gestionadas por Supabase Auth (RNF-04)**
+
+El backend nunca recibe ni almacena contraseñas. No existe ningún endpoint `/auth/login` ni `/auth/register` en el backend — el auth ocurre directamente en el cliente Supabase del frontend. ✅
+
+**Validación de archivos en `POST /documentos` (RNF-08)**
+
+Implementado desde Fase 3: extensión extraída de `Path(nombre).suffix` (no del `content-type` reportado por el cliente), `FORMATOS_PERMITIDOS`, `TAMANO_MAXIMO_BYTES = 10 MB`, ambos con 422 y mensaje claro. ✅
+
+**HTTPS (RNF-07)**
+
+Vercel (frontend) y Render/Railway (backend): TLS activo por defecto en todos los dominios. ✅
+
+### Cambios implementados
+
+**Filtro de prompt injection — `backend/app/chat/service.py`**
+
+```python
+_INJECTION_PATTERNS = re.compile(
+    r"ignora\s+(todas\s+)?las?\s+instrucciones"
+    r"|ignore\s+(all\s+)?(previous\s+)?instructions"
+    r"|disregard\s+(all\s+)?previous"
+    r"|you\s+are\s+now\s+(?!an?\s+ERP)"
+    r"|pretend\s+(you\s+are|to\s+be)"
+    r"|system\s*:\s*"
+    r"|<\s*/?system\s*>",
+    re.IGNORECASE,
+)
+```
+
+- Ejecutado antes del retriever y del LLM — costo cero si se detecta.
+- Detectado → `RespuestaChat(fuera_de_alcance=True)` con mensaje amigable, sin llamar al LLM.
+- Logea `WARNING` con los primeros 120 chars del mensaje.
+- Lookahead negativo evita falsos positivos en frases legítimas.
+
+Casos verificados: 6/6 ataques detectados, 3/3 mensajes legítimos que pasan limpio. ✅
+
+**`.gitignore` reforzado**
+
+- `backend/.env.*` + `frontend/.env` + `frontend/.env.*` con excepciones `!*.env.example`.
+- `backend/**/__pycache__/`, `*.pyc`, `.DS_Store`, `Thumbs.db`.

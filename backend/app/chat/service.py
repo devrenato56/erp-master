@@ -1,12 +1,33 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 from app.chat.retriever import recuperar_contexto, construir_contexto_texto
 from app.core.llm_provider import completar, LLMError
 
 logger = logging.getLogger(__name__)
+
+# Patrones de prompt injection — detección básica (RNF-06 / seguridad)
+_INJECTION_PATTERNS = re.compile(
+    r"ignora\s+(todas\s+)?las?\s+instrucciones"
+    r"|olvida\s+(todo|las?\s+instrucciones)"
+    r"|ignore\s+(all\s+)?(previous\s+)?instructions"
+    r"|disregard\s+(all\s+)?previous"
+    r"|you\s+are\s+now\s+(?!an?\s+ERP)"   # "you are now [something else]"
+    r"|ahora\s+eres\s+(?!un\s+asistente)"
+    r"|actúa\s+como\s+(?!un\s+asistente)"
+    r"|pretend\s+(you\s+are|to\s+be)"
+    r"|system\s*:\s*"                       # intento de inyectar un turno system
+    r"|<\s*/?system\s*>",                  # variante con tags
+    re.IGNORECASE,
+)
+
+_RESPUESTA_INJECTION = (
+    "No puedo procesar ese mensaje. Si tenés alguna pregunta sobre ERP, "
+    "con gusto te ayudo."
+)
 
 # Número máximo de turnos del historial que se incluyen en el prompt.
 # Cada turno son 2 mensajes (usuario + asistente). 6 turnos = 12 mensajes.
@@ -60,14 +81,24 @@ def procesar_mensaje(
     """
     Orquesta el flujo completo de RAG para un turno de chat:
 
-    1. Recupera los chunks más relevantes para el mensaje en el tema activo.
-    2. Si no hay contexto (pregunta fuera de alcance): devuelve rechazo sin llamar al LLM.
-    3. Si hay contexto: construye el prompt y llama al LLM.
-    4. Devuelve la respuesta con metadata de trazabilidad.
+    1. Filtra intentos de prompt injection antes de tocar el LLM.
+    2. Recupera los chunks más relevantes para el mensaje en el tema activo.
+    3. Si no hay contexto (pregunta fuera de alcance): devuelve rechazo sin llamar al LLM.
+    4. Si hay contexto: construye el prompt y llama al LLM.
+    5. Devuelve la respuesta con metadata de trazabilidad.
 
     Lanza LLMError si el proveedor falla (el router lo convierte en HTTP 503).
     """
-    # 1. Recuperar contexto
+    # 1. Filtro de prompt injection
+    if _INJECTION_PATTERNS.search(mensaje):
+        logger.warning("[seguridad] Intento de prompt injection bloqueado: %r", mensaje[:120])
+        return RespuestaChat(
+            contenido=_RESPUESTA_INJECTION,
+            fuera_de_alcance=True,
+            chunks_usados=0,
+        )
+
+    # 2. Recuperar contexto
     chunks = recuperar_contexto(mensaje, tema_id=tema_id)
 
     if not chunks:
