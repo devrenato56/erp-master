@@ -10,12 +10,20 @@ Registro del avance por fases del proyecto.
 | 3 | Base de conocimiento: ingesta de documentos (extracción, chunking, embeddings, moderación, endpoints, seed, frontend) | ✅ Completada |
 | 4 | Chat conversacional con RAG | ✅ Completada |
 | 5 | Evaluaciones (generación, calificación automática) | ✅ Completada |
-| 6 | Perfil de usuario e historial | 🔲 Pendiente |
+| 6 | Perfil de usuario e historial | ✅ Completada |
 | 7 | Polish / landing page / UX final | 🔲 Pendiente |
 | 8 | Contingencia y plan B (Ollama, Supabase local) | 🔲 Pendiente |
 | 9 | Documentación final y entrega | 🔲 Pendiente |
 
 ## Notas por fase
+
+### Fase 6 — Completada
+
+- **7 endpoints REST** (Bloque 1): `GET/PATCH /perfil`, `GET /perfil/progreso`, `GET /perfil/sesiones`, `GET /perfil/evaluaciones`, `GET /perfil/documentos`, `DELETE /perfil/documentos/{id}`. Todos JWT-protegidos; DELETE sincroniza BD + Storage.
+- **Frontend `/perfil`** (Bloque 2): 5 secciones — datos del usuario con edición de nombre inline, cards de estadísticas de actividad, historial de sesiones y evaluaciones navegable, gestión de documentos con eliminación optimista. `Promise.all` de 5 endpoints en paralelo.
+- **Sidebar** (Bloque 3): borde izquierdo `--accent` en item activo, nombre del usuario en footer, nav reorganizada (Inicio/Chat/Evaluaciones/Documentos + sección Cuenta con Perfil). Todos los tokens del design system, sin colores hardcodeados.
+- **Estados vacíos** (Bloque 4): componente `EmptyState` con borde dashed, icono opacidad 50%, texto `--text-muted`, CTA `--accent` en las tres secciones de historial.
+- **RLS** (Bloque 5): todos los queries filtran por `user_id` explícito. DELETE verifica ownership (404/403) antes de borrar. Ningún endpoint expone datos de otros usuarios.
 
 ### Fase 4 — Completada
 

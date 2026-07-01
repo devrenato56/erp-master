@@ -128,3 +128,76 @@ TypeScript: `npx tsc --noEmit` sin errores en el archivo ✅
 ### Verificación
 
 TypeScript: `npx tsc --noEmit` sin errores ✅
+
+---
+
+## Bloque 4 — Estados vacíos
+
+Implementados íntegramente dentro del Bloque 2 (`perfil/page.tsx`).
+
+### Componente `EmptyState`
+
+```tsx
+function EmptyState({ icon, text, cta, href }) {
+  // borde dashed + ícono 50% opacidad + texto --text-muted + CTA --accent
+}
+```
+
+Tres instancias activadas por condición `array.length === 0`:
+
+| Sección | Texto | CTA | Destino |
+|---|---|---|---|
+| Conversaciones | "Todavía no iniciaste ninguna conversación." | "Ir al chat" | `/chat` |
+| Evaluaciones | "Todavía no completaste ninguna evaluación." | "Hacer una evaluación" | `/evaluaciones` |
+| Documentos | "Todavía no subiste ningún documento." | "Subir un documento" | `/documentos` |
+
+Estilo: borde `1px dashed var(--border)`, `borderRadius: --radius-md`, icono con `opacity: 0.5` en `--text-muted`, texto 13px `--text-muted`, botón CTA `--accent` sin borde ni fondo.
+
+---
+
+## Bloque 5 — Cierre de fase
+
+### Verificaciones realizadas
+
+**RLS / aislamiento de datos**
+
+Todos los endpoints de `/perfil` filtran explícitamente por `user_id` extraído del JWT. El backend usa `service_role` (ignora RLS), por lo que el filtrado es responsabilidad del código:
+
+| Endpoint | Filtro explícito |
+|---|---|
+| `GET /perfil` | `.eq("id", user_id)` |
+| `PATCH /perfil` | `.eq("id", user_id)` |
+| `GET /perfil/progreso` | `.eq("usuario_id", user_id)` en sesiones e intentos |
+| `GET /perfil/sesiones` | `.eq("usuario_id", user_id)` |
+| `GET /perfil/evaluaciones` | `.eq("usuario_id", user_id)` |
+| `GET /perfil/documentos` | `.eq("usuario_id", user_id)` |
+| `DELETE /perfil/documentos/{id}` | Lectura previa con `.eq("id", doc_id)` + validación `doc["usuario_id"] != user_id` → 403 |
+
+Ningún endpoint puede devolver datos de otro usuario ✅
+
+**DELETE documento — sincronización completa**
+
+El endpoint ejecuta en orden:
+1. `chunk.delete().eq("documento_id", id)` — elimina chunks (explícito, aunque FK CASCADE lo haría)
+2. `documento.delete().eq("id", id)` — elimina registro
+3. `storage.from_("documentos").remove([storage_path])` — elimina archivo del bucket
+
+Ownership verificado antes de cualquier operación: 404 si no existe, 403 si no es el dueño ✅
+
+**Coherencia visual del sidebar**
+
+Revisado `frontend/components/sidebar.tsx`: todos los colores usan tokens CSS (`--bg-surface`, `--border`, `--accent`, `--text-primary/secondary/muted`, `--bg-surface-hover`). Ningún valor hardcodeado ✅
+
+**Condición de salida de la fase**
+
+Un usuario puede:
+1. Ver en `/perfil` su nombre, correo, fecha de registro, resumen de actividad (temas, evaluaciones, puntaje promedio, mejor puntaje)
+2. Navegar el historial de conversaciones clickeando cada sesión → `/chat/[id]`
+3. Navegar el historial de evaluaciones → `/evaluaciones/[id]/resultados`
+4. Gestionar documentos propios con eliminación desde la misma pantalla
+5. Editar su nombre inline sin abrir un modal
+6. Ver estados vacíos con CTA en las tres secciones de historial
+
+La navegación global en el sidebar está presente en todas las rutas protegidas con borde izquierdo accent en el item activo, icono accent y nombre del usuario en el footer.
+
+Fase 6 completada ✅
