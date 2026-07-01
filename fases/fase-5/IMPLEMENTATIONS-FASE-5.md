@@ -92,3 +92,35 @@ Generación real sobre tema "Gestión del Cambio Organizacional" (119 chunks):
 - Preguntas coherentes con el contenido del PDF (gestión del cambio, implementación ERP, muestreo de investigación) ✅
 - Evaluación persistida en Supabase: `evaluacion_id=651e0e7e...` con 8 preguntas ✅
 - Tiempo de generación (retriever + LLM): ~4s (tokens=3469) ✅
+
+---
+
+## Bloque 2 — Corrección automática (opción múltiple y V/F)
+
+### Archivo modificado
+
+**`backend/app/evaluaciones/service.py`** — agregadas dos funciones:
+
+**`_normalizar(texto) -> str`**
+
+Normalización tolerante para comparación:
+1. `strip()` + `lower()` — elimina espacios externos y unifica capitalización.
+2. `unicodedata.normalize("NFD", ...)` + filtro de categoría `"Mn"` — elimina acentos/diacríticos (ej. `"Verdadero"` == `"verdadero"`, `"Fácil"` == `"Facil"`).
+3. `" ".join(texto.split())` — colapsa espacios internos múltiples.
+
+**`corregir_automatica(pregunta, respuesta_dada) -> float`**
+
+- Solo aplica a `opcion_multiple` y `verdadero_falso` — lanza `ValueError` si se llama con `"abierta"`.
+- Devuelve `1.0` si `_normalizar(respuesta_dada) == _normalizar(respuesta_correcta)`, `0.0` en cualquier otro caso.
+- Devuelve `0.0` si `respuesta_dada` es `None` o vacía (sin crashear).
+- No llama al LLM — comparación determinista y local (RNF-17: sin costo de API).
+
+### Verificación — 15 casos
+
+| Grupo | Casos | Resultado |
+|---|---|---|
+| OM correcta (exacta, mayúsculas, espacios) | 3 | ✅ 1.0 |
+| OM incorrecta (letra distinta, vacía, None) | 4 | ✅ 0.0 |
+| VF correcta (exacta, minúsculas, espacios) | 4 | ✅ 1.0 |
+| VF incorrecta (opuesta, vacía, None) | 3 | ✅ 0.0 |
+| Tipo "abierta" → ValueError | 1 | ✅ |

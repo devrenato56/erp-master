@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import random
+import unicodedata
 from dataclasses import dataclass
 
 from app.chat.retriever import recuperar_contexto, construir_contexto_texto
@@ -142,6 +142,49 @@ def _parsear_preguntas(texto: str) -> list[dict]:
             raise ValueError(f"Pregunta {i+1}: falta respuesta_correcta para tipo '{p['tipo']}'.")
 
     return preguntas
+
+
+# ---------------------------------------------------------------------------
+# Corrección automática (opción múltiple y verdadero/falso)
+# ---------------------------------------------------------------------------
+
+def _normalizar(texto: str) -> str:
+    """
+    Normaliza un texto para comparación tolerante:
+    - Minúsculas
+    - Sin acentos (NFD → solo ASCII base)
+    - Sin espacios al inicio/fin
+    - Espacios internos colapsados a uno
+    """
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    texto = " ".join(texto.split())
+    return texto
+
+
+def corregir_automatica(pregunta: dict, respuesta_dada: str | None) -> float:
+    """
+    Compara la respuesta del usuario con pregunta["respuesta_correcta"].
+    Solo válida para tipos "opcion_multiple" y "verdadero_falso".
+
+    Devuelve:
+        1.0  si la respuesta es correcta (normalizada)
+        0.0  si es incorrecta, nula o el tipo no aplica
+
+    No llama al LLM — comparación determinista y local.
+    """
+    tipo = pregunta.get("tipo")
+    if tipo not in ("opcion_multiple", "verdadero_falso"):
+        raise ValueError(
+            f"corregir_automatica solo aplica a opcion_multiple y verdadero_falso, no a '{tipo}'."
+        )
+
+    correcta = pregunta.get("respuesta_correcta")
+    if not correcta or not respuesta_dada:
+        return 0.0
+
+    return 1.0 if _normalizar(respuesta_dada) == _normalizar(correcta) else 0.0
 
 
 # ---------------------------------------------------------------------------
