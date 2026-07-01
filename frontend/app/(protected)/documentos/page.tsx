@@ -382,7 +382,7 @@ export default function DocumentosPage() {
     : ["Archivo", "Tema", "Visibilidad", "Estado", "Subido", ""];
 
   return (
-    <div style={{ padding: isMobile ? "24px 16px" : "40px 48px", maxWidth: "960px" }}>
+    <div style={{ padding: isMobile ? "24px 16px" : "40px 48px", maxWidth: "960px", margin: "0 auto" }}>
       {/* Header */}
       <div style={{ marginBottom: "32px" }}>
         <p

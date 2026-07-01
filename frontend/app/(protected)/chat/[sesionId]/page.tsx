@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { Send, ArrowLeft, AlertCircle } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { apiFetch } from "@/lib/api";
 import { useBreakpoint } from "@/lib/use-breakpoint";
 
@@ -99,10 +100,51 @@ function MensajeAsistente({ msg, fueraDeAlcance }: { msg: Mensaje; fueraDeAlcanc
             fontSize: "14px",
             color: fueraDeAlcance ? "var(--text-secondary)" : "var(--text-primary)",
             lineHeight: 1.7,
-            whiteSpace: "pre-wrap",
           }}
         >
-          {msg.contenido}
+          <ReactMarkdown
+            components={{
+              p: ({ children }) => (
+                <p style={{ margin: "0 0 10px", lineHeight: 1.7 }}>{children}</p>
+              ),
+              strong: ({ children }) => (
+                <strong style={{ fontWeight: 600, color: "var(--text-primary)" }}>{children}</strong>
+              ),
+              em: ({ children }) => (
+                <em style={{ fontStyle: "italic", color: "var(--text-secondary)" }}>{children}</em>
+              ),
+              ul: ({ children }) => (
+                <ul style={{ margin: "0 0 10px", paddingLeft: "20px" }}>{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol style={{ margin: "0 0 10px", paddingLeft: "20px" }}>{children}</ol>
+              ),
+              li: ({ children }) => (
+                <li style={{ marginBottom: "4px", lineHeight: 1.6 }}>{children}</li>
+              ),
+              code: ({ children }) => (
+                <code
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "13px",
+                    backgroundColor: "rgba(255,255,255,0.07)",
+                    padding: "1px 5px",
+                    borderRadius: "3px",
+                    color: "var(--accent)",
+                  }}
+                >
+                  {children}
+                </code>
+              ),
+              h3: ({ children }) => (
+                <h3 style={{ fontSize: "15px", fontWeight: 600, margin: "12px 0 6px", color: "var(--text-primary)" }}>
+                  {children}
+                </h3>
+              ),
+            }}
+          >
+            {msg.contenido}
+          </ReactMarkdown>
         </div>
         <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "8px" }}>
           {formatHora(msg.enviado_en)}
@@ -379,7 +421,7 @@ export default function ConversacionPage({
           padding: isMobile ? "24px 16px" : "40px 48px",
         }}
       >
-        <div style={{ maxWidth: "680px", margin: "0 auto" }}>
+        <div style={{ maxWidth: "880px", margin: "0 auto" }}>
           {/* Estado vacío */}
           {!cargando && mensajes.length === 0 && (
             <div style={{ textAlign: "center", marginTop: "80px" }}>
@@ -446,7 +488,7 @@ export default function ConversacionPage({
           backgroundColor: "var(--bg-base)",
         }}
       >
-        <div style={{ maxWidth: "680px", margin: "0 auto" }}>
+        <div style={{ maxWidth: "880px", margin: "0 auto" }}>
           {/* Error de envío */}
           {errorEnvio && (
             <div

@@ -21,12 +21,12 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 # ---------------------------------------------------------------------------
 
 class CrearSesionRequest(BaseModel):
-    tema_id: str
+    tema_id: str | None = None
 
 
 class CrearSesionResponse(BaseModel):
     sesion_id: str
-    tema_id: str
+    tema_id: str | None
     iniciada_en: str
 
 
@@ -52,17 +52,28 @@ class SesionOut(BaseModel):
     id: str
     tema_id: str | None
     iniciada_en: str
+    archivada: bool = False
+
+
+class ArchivarSesionRequest(BaseModel):
+    archivada: bool
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _verificar_sesion_propia(sesion_id: str, user_id: str) -> dict:
-    """Devuelve la sesión si existe y pertenece al usuario; lanza 404/403 si no."""
+def _verificar_sesion_propia(
+    sesion_id: str,
+    user_id: str,
+    *,
+    permitir_eliminada: bool = False,
+) -> dict:
+    """Devuelve la sesión si existe y pertenece al usuario; lanza 404/403 si no.
+    Por defecto bloquea sesiones con eliminada_en != NULL."""
     resp = (
         supabase.table("sesion_chat")
-        .select("id, usuario_id, tema_id, iniciada_en")
+        .select("id, usuario_id, tema_id, iniciada_en, archivada, eliminada_en")
         .eq("id", sesion_id)
         .single()
         .execute()
@@ -71,6 +82,8 @@ def _verificar_sesion_propia(sesion_id: str, user_id: str) -> dict:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sesión no encontrada.")
     if resp.data["usuario_id"] != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés acceso a esta sesión.")
+    if not permitir_eliminada and resp.data.get("eliminada_en"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sesión no encontrada.")
     return resp.data
 
 
@@ -98,16 +111,17 @@ async def crear_sesion(
     body: CrearSesionRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    # Verificar que el tema existe
-    tema_resp = (
-        supabase.table("tema")
-        .select("id")
-        .eq("id", body.tema_id)
-        .single()
-        .execute()
-    )
-    if not tema_resp.data:
-        raise HTTPException(status_code=422, detail="El tema indicado no existe.")
+    # Verificar que el tema existe (solo si se proporcionó uno)
+    if body.tema_id is not None:
+        tema_resp = (
+            supabase.table("tema")
+            .select("id")
+            .eq("id", body.tema_id)
+            .single()
+            .execute()
+        )
+        if not tema_resp.data:
+            raise HTTPException(status_code=422, detail="El tema indicado no existe.")
 
     sesion_id = str(uuid.uuid4())
     resp = supabase.table("sesion_chat").insert(
@@ -189,16 +203,28 @@ async def enviar_mensaje(
 # ---------------------------------------------------------------------------
 
 @router.get("/sesiones", response_model=list[SesionOut])
-async def listar_sesiones(user_id: str = Depends(get_current_user_id)):
-    resp = (
+async def listar_sesiones(
+    user_id: str = Depends(get_current_user_id),
+    archivadas: bool = False,
+    eliminadas: bool = False,
+):
+    q = (
         supabase.table("sesion_chat")
-        .select("id, tema_id, iniciada_en")
+        .select("id, tema_id, iniciada_en, archivada")
         .eq("usuario_id", user_id)
-        .order("iniciada_en", desc=True)
-        .execute()
     )
+    if eliminadas:
+        q = q.filter("eliminada_en", "not.is", "null")
+    else:
+        q = q.is_("eliminada_en", "null").eq("archivada", archivadas)
+    resp = q.order("iniciada_en", desc=True).execute()
     return [
-        SesionOut(id=s["id"], tema_id=s["tema_id"], iniciada_en=s["iniciada_en"])
+        SesionOut(
+            id=s["id"],
+            tema_id=s["tema_id"],
+            iniciada_en=s["iniciada_en"],
+            archivada=s.get("archivada", False),
+        )
         for s in (resp.data or [])
     ]
 
@@ -230,3 +256,63 @@ async def obtener_mensajes(
         )
         for m in (resp.data or [])
     ]
+
+
+# ---------------------------------------------------------------------------
+# PATCH /chat/sesiones/{sesion_id}/archivar — archivar / desarchivar
+# ---------------------------------------------------------------------------
+
+@router.patch("/sesiones/{sesion_id}/archivar", status_code=status.HTTP_200_OK)
+async def archivar_sesion(
+    sesion_id: str,
+    body: ArchivarSesionRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    _verificar_sesion_propia(sesion_id, user_id)
+    supabase.table("sesion_chat").update({"archivada": body.archivada}).eq("id", sesion_id).execute()
+    return {"archivada": body.archivada}
+
+
+# ---------------------------------------------------------------------------
+# DELETE /chat/sesiones/{sesion_id} — eliminación suave (soft-delete)
+# ---------------------------------------------------------------------------
+
+@router.delete("/sesiones/{sesion_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_sesion(
+    sesion_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    _verificar_sesion_propia(sesion_id, user_id)
+    supabase.table("sesion_chat").update({"eliminada_en": "now()"}).eq("id", sesion_id).execute()
+    logger.info("Sesion %s eliminada (soft-delete) por user %s", sesion_id, user_id)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /chat/sesiones/{sesion_id}/restaurar — restaurar desde papelera
+# ---------------------------------------------------------------------------
+
+@router.patch("/sesiones/{sesion_id}/restaurar", status_code=status.HTTP_200_OK)
+async def restaurar_sesion(
+    sesion_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    sesion = _verificar_sesion_propia(sesion_id, user_id, permitir_eliminada=True)
+    if not sesion.get("eliminada_en"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La sesión no está en la papelera.")
+    supabase.table("sesion_chat").update({"eliminada_en": None, "archivada": False}).eq("id", sesion_id).execute()
+    logger.info("Sesion %s restaurada por user %s", sesion_id, user_id)
+    return {"restaurada": True}
+
+
+# ---------------------------------------------------------------------------
+# DELETE /chat/sesiones/{sesion_id}/permanente — eliminación definitiva
+# ---------------------------------------------------------------------------
+
+@router.delete("/sesiones/{sesion_id}/permanente", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_permanente(
+    sesion_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    _verificar_sesion_propia(sesion_id, user_id, permitir_eliminada=True)
+    supabase.table("sesion_chat").delete().eq("id", sesion_id).execute()
+    logger.info("Sesion %s eliminada permanentemente por user %s", sesion_id, user_id)

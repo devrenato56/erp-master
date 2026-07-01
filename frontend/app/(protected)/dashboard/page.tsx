@@ -51,7 +51,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div style={{ padding: isMobile ? "32px 16px" : "48px 48px", maxWidth: "800px" }}>
+    <div style={{ padding: isMobile ? "32px 16px" : "48px 48px", maxWidth: "800px", margin: "0 auto" }}>
       {/* Saludo */}
       <div style={{ marginBottom: "40px" }}>
         <p
