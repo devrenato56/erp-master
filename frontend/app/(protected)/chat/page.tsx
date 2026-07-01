@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useBreakpoint } from "@/lib/use-breakpoint";
 
 interface Tema {
   id: string;
@@ -20,6 +21,7 @@ interface SesionResponse {
 
 export default function ChatPage() {
   const router = useRouter();
+  const { isMobile } = useBreakpoint();
   const [temas, setTemas] = useState<Tema[]>([]);
   const [cargando, setCargando] = useState(true);
   const [iniciando, setIniciando] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div style={{ padding: "40px 48px", maxWidth: "800px" }}>
+    <div style={{ padding: isMobile ? "24px 16px" : "40px 48px", maxWidth: "800px" }}>
       {/* Header */}
       <div style={{ marginBottom: "40px" }}>
         <p

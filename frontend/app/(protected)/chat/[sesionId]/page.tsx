@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { Send, ArrowLeft, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useBreakpoint } from "@/lib/use-breakpoint";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,6 +187,7 @@ export default function ConversacionPage({
 }) {
   const { sesionId } = use(params);
   const router = useRouter();
+  const { isMobile } = useBreakpoint();
 
   const [mensajes, setMensajes] = useState<MensajeConMeta[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -324,7 +326,7 @@ export default function ConversacionPage({
           display: "flex",
           alignItems: "center",
           gap: "12px",
-          padding: "12px 32px",
+          padding: isMobile ? "10px 16px" : "12px 32px",
           borderBottom: "1px solid var(--border)",
           backgroundColor: "var(--bg-surface)",
         }}
@@ -374,7 +376,7 @@ export default function ConversacionPage({
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "40px 48px",
+          padding: isMobile ? "24px 16px" : "40px 48px",
         }}
       >
         <div style={{ maxWidth: "680px", margin: "0 auto" }}>
@@ -440,7 +442,7 @@ export default function ConversacionPage({
         style={{
           flexShrink: 0,
           borderTop: "1px solid var(--border)",
-          padding: "16px 48px 24px",
+          padding: isMobile ? "12px 16px 20px" : "16px 48px 24px",
           backgroundColor: "var(--bg-base)",
         }}
       >

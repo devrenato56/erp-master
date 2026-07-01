@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardList } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useBreakpoint } from "@/lib/use-breakpoint";
 
 interface Tema {
   id: string;
@@ -25,6 +26,7 @@ interface IntentoResponse {
 
 export default function EvaluacionesPage() {
   const router = useRouter();
+  const { isMobile } = useBreakpoint();
   const [temas, setTemas] = useState<Tema[]>([]);
   const [cargando, setCargando] = useState(true);
   const [generando, setGenerando] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export default function EvaluacionesPage() {
   }
 
   return (
-    <div style={{ padding: "40px 48px", maxWidth: "800px" }}>
+    <div style={{ padding: isMobile ? "24px 16px" : "40px 48px", maxWidth: "800px" }}>
       {/* Header */}
       <div style={{ marginBottom: "40px" }}>
         <p style={{

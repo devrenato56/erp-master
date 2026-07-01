@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, XCircle, ArrowLeft, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useBreakpoint } from "@/lib/use-breakpoint";
 
 interface RespuestaCalificada {
   pregunta_id: string;
@@ -31,6 +32,7 @@ export default function ResultadosPage({
 }) {
   const { intentoId } = use(params);
   const router = useRouter();
+  const { isMobile } = useBreakpoint();
 
   const [resultado, setResultado] = useState<ResultadoIntento | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -69,7 +71,7 @@ export default function ResultadosPage({
   const correctas = respuestas.filter((r) => r.puntaje_obtenido >= 0.9).length;
 
   return (
-    <div style={{ padding: "40px 48px" }}>
+    <div style={{ padding: isMobile ? "24px 16px" : "40px 48px" }}>
       <div style={{ maxWidth: "680px", margin: "0 auto" }}>
 
         {/* Navegación */}

@@ -509,3 +509,41 @@ Para confirmar en cada navegador (Chrome, Edge, Firefox):
 - [ ] Los iconos de Lucide se renderizan (SVG).
 
 **Veredicto:** el stack no usa ninguna API sin soporte en Chrome 120+ / Edge 120+ / Firefox 120+. La compatibilidad está garantizada por construcción (Next.js transpila, CSS usa propiedades universales). ✅
+
+---
+
+## Bloque 8 — Pulido visual
+
+### Dashboard reescrito como pantalla de inicio real
+
+**`frontend/app/(protected)/dashboard/page.tsx`** — reescrito desde prototipo técnico a pantalla de bienvenida.
+
+**Antes:** mostraba datos de debug ("Verificado por el backend", UUID del usuario, timestamp raw). Sin quick-links a otras secciones.
+
+**Ahora:**
+- Saludo personalizado con el primer nombre del usuario (`nombre.split(" ")[0]`).
+- Grid de 4 stats de progreso (`temas_estudiados`, `evaluaciones_realizadas`, `puntaje_promedio_20`, `mejor_puntaje_20`) cargados desde `GET /perfil/progreso` — muestra `—` mientras carga, sin bloquear el render.
+- Grid responsive: `repeat(4, 1fr)` en desktop, `repeat(2, 1fr)` en mobile.
+- 3 acciones rápidas en `AccionCard`: "Ir al chat", "Hacer una evaluación", "Mis documentos" — con hover state (borde accent + fondo surface-hover + ícono accent).
+- Padding responsive: `32px 16px` mobile / `48px 48px` desktop.
+
+### Padding responsive completado en todas las páginas protegidas
+
+Auditoría de todas las rutas bajo `app/(protected)/`:
+
+| Página | Antes | Después |
+|---|---|---|
+| `dashboard/page.tsx` | `48px 32px` fijo | `isMobile ? "32px 16px" : "48px 48px"` ✅ |
+| `chat/page.tsx` | `40px 48px` fijo | `isMobile ? "24px 16px" : "40px 48px"` ✅ |
+| `chat/[sesionId]/page.tsx` — header | `12px 32px` fijo | `isMobile ? "10px 16px" : "12px 32px"` ✅ |
+| `chat/[sesionId]/page.tsx` — mensajes | `40px 48px` fijo | `isMobile ? "24px 16px" : "40px 48px"` ✅ |
+| `chat/[sesionId]/page.tsx` — input | `16px 48px 24px` fijo | `isMobile ? "12px 16px 20px" : "16px 48px 24px"` ✅ |
+| `evaluaciones/page.tsx` | `40px 48px` fijo | `isMobile ? "24px 16px" : "40px 48px"` ✅ |
+| `evaluaciones/[intentoId]/page.tsx` — header | `12px 32px` fijo | `isMobile ? "10px 16px" : "12px 32px"` ✅ |
+| `evaluaciones/[intentoId]/page.tsx` — contenido | `32px 48px` fijo | `isMobile ? "24px 16px" : "32px 48px"` ✅ |
+| `evaluaciones/[intentoId]/page.tsx` — footer | `16px 48px` fijo | `isMobile ? "12px 16px" : "16px 48px"` ✅ |
+| `evaluaciones/[intentoId]/resultados/page.tsx` | `40px 48px` fijo | `isMobile ? "24px 16px" : "40px 48px"` ✅ |
+| `documentos/page.tsx` | ya tenía responsive | — ✅ |
+| `perfil/page.tsx` | ya tenía responsive | — ✅ |
+
+Todas las páginas protegidas respetan ahora `24px 16px` de padding en mobile. ✅

@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft, Send } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useBreakpoint } from "@/lib/use-breakpoint";
 
 interface Pregunta {
   id: string;
@@ -181,6 +182,7 @@ export default function EvaluacionPage({
 }) {
   const { intentoId } = use(params);
   const router = useRouter();
+  const { isMobile } = useBreakpoint();
 
   const [preguntas, setPreguntas] = useState<Pregunta[]>([]);
   const [respuestas, setRespuestas] = useState<Record<string, string>>({});
@@ -266,7 +268,7 @@ export default function EvaluacionPage({
       {/* Header */}
       <div style={{
         flexShrink: 0, display: "flex", alignItems: "center", gap: "12px",
-        padding: "12px 32px", borderBottom: "1px solid var(--border)",
+        padding: isMobile ? "10px 16px" : "12px 32px", borderBottom: "1px solid var(--border)",
         backgroundColor: "var(--bg-surface)",
         position: "sticky", top: 0, zIndex: 10,
       }}>
@@ -292,7 +294,7 @@ export default function EvaluacionPage({
       </div>
 
       {/* Contenido */}
-      <div style={{ flex: 1, padding: "32px 48px", overflowY: "auto" }}>
+      <div style={{ flex: 1, padding: isMobile ? "24px 16px" : "32px 48px", overflowY: "auto" }}>
         <div style={{ maxWidth: "680px", margin: "0 auto" }}>
 
           {cargando ? (
@@ -339,7 +341,7 @@ export default function EvaluacionPage({
       {preguntas.length > 0 && (
         <div style={{
           flexShrink: 0, borderTop: "1px solid var(--border)",
-          padding: "16px 48px", backgroundColor: "var(--bg-base)",
+          padding: isMobile ? "12px 16px" : "16px 48px", backgroundColor: "var(--bg-base)",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
