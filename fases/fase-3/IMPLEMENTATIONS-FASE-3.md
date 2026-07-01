@@ -45,6 +45,65 @@ Toda excepción se convierte en `ExtractionError` con mensaje en español (RNF-1
 
 ---
 
+## Bloque 3 — Generación de embeddings
+
+### Archivos creados / modificados
+
+**`backend/app/base_conocimiento/embeddings.py`**
+
+Constante `EMBEDDING_DIM = 384` exportada — coincide exactamente con la columna `vector(384)` de la tabla `chunk` en Supabase.
+
+Singleton `_model`: `SentenceTransformer` se instancia una sola vez al primer uso vía `_get_model()`. Las llamadas siguientes reutilizan la instancia en memoria (segunda llamada: ~8ms vs. carga inicial).
+
+Funciones públicas:
+- `generar_embedding(texto: str) -> list[float]`: vector único de 384 floats.
+- `generar_embeddings(textos: list[str]) -> list[list[float]]`: batch completo en una sola pasada con `batch_size=64`. Lista vacía devuelve `[]` sin error.
+
+Ambas devuelven `list[float]` (serializable a JSON / compatible con pgvector directamente).
+
+### Verificación
+- Dimensión: 384 ✅ (coincide con `vector(384)` en Supabase)
+- Tipo de dato: `float` ✅ (compatible con pgvector)
+- Singleton: segunda llamada en ~8ms, sin recarga del modelo ✅
+- Batch vacío → `[]` sin error ✅
+- Documento simulado de ~20 páginas (89 chunks): embeddings generados en **2.54s** ✅ (límite RNF-03: 30s)
+
+---
+
+## Bloque 4 — Moderación automática
+
+### Archivos creados / modificados
+
+**`backend/app/core/llm_provider.py`** *(implementado — necesario para moderación y Fase 4)*
+
+Función pública `completar(messages, temperature, max_tokens) -> str`:
+- Interfaz única agnóstica al proveedor: recibe lista de mensajes estándar (`role`/`content`).
+- `LLM_PROVIDER=groq` → usa `groq` SDK con modelo `llama-3.3-70b-versatile`.
+- `LLM_PROVIDER=ollama` → llama a `/api/chat` del servidor Ollama local con modelo `llama3.1:8b`.
+- Selección vía `settings.llm_provider` — sin duplicar lógica de prompts entre proveedores.
+
+**`backend/app/base_conocimiento/moderacion.py`**
+
+Función pública `moderar_documento(texto_extraido: str) -> ResultadoModeracion`:
+- Solo debe llamarse cuando `visibilidad == 'compartido'` (documentos privados se saltan — RF-08).
+- Envía los primeros 3000 chars del texto al LLM con un prompt estructurado que exige respuesta JSON: `{"aprobado": bool, "motivo": str}`.
+- `_parsear_respuesta`: extrae el bloque JSON con regex, tolera texto extra antes/después. Devuelve `None` si no puede parsearse de forma segura.
+- Reintenta hasta 2 veces ante respuesta mal formada o error del LLM.
+- **Fallback ante ambigüedad**: si todos los intentos fallan, devuelve `aprobado=False` con motivo explicando que quedará pendiente de revisión manual — nunca aprueba por defecto (RF-09).
+- `temperature=0.0` para maximizar consistencia de la respuesta estructurada.
+
+`ResultadoModeracion(aprobado: bool, motivo: str)` — resultado que el endpoint usa para actualizar `estado_moderacion` y `motivo_rechazo` en la tabla `documento`.
+
+### Verificación
+- Documento ERP claro → `aprobado=True` con motivo coherente ✅
+- Documento off-topic (recetas de cocina) → `aprobado=False` con motivo claro ✅
+- Documento borderline (gestión empresarial) → decisión consistente con motivo ✅
+- Respuesta mal formada del LLM → `_parsear_respuesta` devuelve `None` ✅
+- JSON con texto extra antes/después → parseado correctamente ✅
+- Groq (`llama-3.3-70b-versatile`) responde correctamente ✅
+
+---
+
 ## Bloque 2 — Fragmentación (chunking)
 
 ### Archivos creados / modificados
