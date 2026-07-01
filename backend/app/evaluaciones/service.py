@@ -319,6 +319,38 @@ def calificar_abierta(
 
 
 # ---------------------------------------------------------------------------
+# Cálculo de puntaje consolidado
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PuntajeConsolidado:
+    promedio: float      # 0.0 – 1.0
+    sobre_20: float      # 0.0 – 20.0  (escala académica peruana)
+    aprobado: bool       # umbral: 11/20
+
+
+def calcular_puntaje_total(puntajes: list[float]) -> PuntajeConsolidado:
+    """
+    Promedia los puntajes individuales (0.0–1.0) de todas las respuestas
+    del intento y los convierte a escala 0–20.
+
+    Todas las preguntas tienen el mismo peso, sin importar el tipo.
+    Umbral de aprobación: 11/20 (estándar académico peruano).
+
+    Si la lista está vacía devuelve 0.0 en todas las escalas.
+    """
+    if not puntajes:
+        return PuntajeConsolidado(promedio=0.0, sobre_20=0.0, aprobado=False)
+
+    promedio = sum(puntajes) / len(puntajes)
+    promedio = max(0.0, min(1.0, promedio))      # clamp defensivo
+    sobre_20 = round(promedio * 20, 2)
+    aprobado = sobre_20 >= 11.0
+
+    return PuntajeConsolidado(promedio=promedio, sobre_20=sobre_20, aprobado=aprobado)
+
+
+# ---------------------------------------------------------------------------
 # Función principal pública
 # ---------------------------------------------------------------------------
 

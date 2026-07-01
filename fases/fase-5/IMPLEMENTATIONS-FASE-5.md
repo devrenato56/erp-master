@@ -165,3 +165,37 @@ Flujo:
 | Tipo incorrecto → `ValueError` | — | ✅ |
 
 Gradiente de puntaje coherente con la calidad de las respuestas. Feedback específico en todos los casos evaluados por el LLM.
+
+---
+
+## Bloque 4 — Cálculo de puntaje consolidado
+
+### Archivo modificado
+
+**`backend/app/evaluaciones/service.py`** — agregados dataclass y función:
+
+**`@dataclass PuntajeConsolidado(promedio, sobre_20, aprobado)`**
+- `promedio`: float 0.0–1.0 (escala interna).
+- `sobre_20`: float 0.0–20.0 redondeado a 2 decimales (escala académica peruana).
+- `aprobado`: bool — umbral 11/20 (estándar universitario peruano).
+
+**`calcular_puntaje_total(puntajes: list[float]) -> PuntajeConsolidado`**
+- Promedia los puntajes individuales de todas las respuestas del intento.
+- Todas las preguntas tienen el mismo peso (opción múltiple, V/F y abierta equivalen igual).
+- Conversión: `sobre_20 = round(promedio * 20, 2)`.
+- Clamp defensivo al rango `[0.0, 1.0]` antes de escalar.
+- Lista vacía → `PuntajeConsolidado(0.0, 0.0, False)` sin error.
+
+### Verificación — 9 casos
+
+| Caso | Promedio | /20 | Aprobado |
+|---|---|---|---|
+| Todo correcto (8/8) | 1.0 | 20.00 | ✅ |
+| Todo incorrecto (0/8) | 0.0 | 0.00 | ❌ |
+| Mitad correctas (4/8) | 0.5 | 10.00 | ❌ |
+| Mixto 1.0+0.7+0.4+0.0 | 0.525 | 10.50 | ❌ |
+| Justo en el límite 0.55×8 | 0.55 | 11.00 | ✅ |
+| Una pregunta correcta | 1.0 | 20.00 | ✅ |
+| Una pregunta incorrecta | 0.0 | 0.00 | ❌ |
+| Parciales variados | 0.5667 | 11.33 | ✅ |
+| Lista vacía | 0.0 | 0.00 | ❌ |
