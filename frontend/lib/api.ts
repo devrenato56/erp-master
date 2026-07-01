@@ -8,6 +8,22 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   return { Authorization: `Bearer ${session.access_token}` };
 }
 
+export async function apiFetchForm<T>(path: string, body: FormData, method = "POST"): Promise<T> {
+  const authHeaders = await getAuthHeaders();
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: { ...authHeaders as Record<string, string> },
+    body,
+  });
+  if (!res.ok) {
+    const b = await res.json().catch(() => ({}));
+    const err = new Error(b?.detail ?? `Error ${res.status}`) as Error & { status: number };
+    err.status = res.status;
+    throw err;
+  }
+  return res.json() as Promise<T>;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}

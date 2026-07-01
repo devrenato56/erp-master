@@ -236,3 +236,71 @@ venv/Scripts/python scripts/seed_temas.py
 La free tier de `gemini-2.5-flash` tiene un límite de 5 RPM. Para PDFs de 81 páginas esto implica que Gemini solo procesa ~5-10 páginas por minuto antes de caer en 429. El fallback a pypdf es transparente: cada página que falla en Gemini se extrae con pypdf sin interrumpir el proceso. El texto resultante es completo y válido para RAG.
 
 Para el pipeline de usuarios (documentos individuales de máx. 10 MB / ~40 páginas), Gemini suele terminar sin alcanzar el límite. El seed es el único caso que procesa 81 páginas de corrido.
+
+---
+
+## Bloque 7 — Frontend de gestión de documentos
+
+### Archivos creados / modificados
+
+**`backend/app/temas/router.py`** *(nuevo)*
+Endpoint `GET /temas` protegido con JWT. Devuelve todos los temas ordenados por nombre con campos `id, nombre, descripcion, es_predefinido`. Usado por el frontend para poblar el selector del formulario de subida.
+
+**`backend/app/main.py`** *(actualizado)*
+Registrado `temas_router` con `app.include_router(temas_router)`. Endpoints disponibles: `/documentos`, `/documentos/{id}`, `/temas`, `/health`, `/me`.
+
+**`frontend/lib/api.ts`** *(actualizado)*
+Agregada `apiFetchForm<T>(path, body: FormData, method)`: variante de `apiFetch` que NO setea `Content-Type` (el browser lo setea automáticamente con boundary para multipart/form-data). Aún adjunta JWT via `Authorization: Bearer`.
+
+**`frontend/components/sidebar.tsx`** *(nuevo)*
+Sidebar de navegación fija (220px, `--bg-surface`, `border-right`):
+- Brand "ChatERP" con barra vertical verde menta
+- Nav principal: Chat, Documentos, Evaluaciones
+- Sección "CUENTA" (label en small caps): Dashboard, Perfil
+- Footer: email del usuario + botón "Cerrar sesión"
+- Estado activo: `--bg-surface-hover` + icono en `--accent`
+- Hover states manejados inline (sin librería de animación externa)
+
+**`frontend/app/(protected)/layout.tsx`** *(reescritura)*
+El layout de rutas protegidas ahora renderiza:
+```
+<AuthGuard>
+  <div flex row full-height>
+    <Sidebar />           ← sticky, 220px
+    <main flex-1>         ← scrollable, contenido de cada ruta
+      {children}
+    </main>
+  </div>
+</AuthGuard>
+```
+Todas las páginas protegidas existentes (dashboard, chat, evaluaciones, perfil) heredan el sidebar automáticamente.
+
+**`frontend/app/(protected)/documentos/page.tsx`** *(nuevo)*
+Página completa de gestión de documentos con tres secciones:
+
+1. **Header**: section label + h1 "Documentos" + descripción + botón "Subir documento"
+
+2. **Stats cards** (3 columnas, estilo hackO.dev): Documentos totales · Compartidos · Aprobados — separados por bordes de 1px sin sombra.
+
+3. **`UploadPanel`** (se muestra/oculta con botón):
+   - Input de archivo (PDF, DOCX, TXT, MD — máx. 10 MB)
+   - Selector de tema (dropdown de `/temas`, temas predefinidos marcados con ★)
+   - Toggle Privado / Compartido (segmented button)
+   - Aviso contextual cuando se elige "Compartido" (moderación automática)
+   - Feedback inline de error/éxito tras subida
+   - Botón "Subir" con estado "Procesando..." durante la operación
+   - Llama a `apiFetchForm("/documentos", FormData)` y refresca la lista al terminar
+
+4. **Tabla de documentos**:
+   - Columnas: Archivo (badge formato + nombre), Tema, Visibilidad, Estado, Subido, Acciones
+   - Badges: `BadgeFormato` (monospace, uppercase), `BadgeVisibilidad` (accent-muted si compartido), `BadgeEstado` (verde/muted/danger según aprobado/pendiente/rechazado)
+   - Hover por fila: bg-base → bg-surface
+   - Botón eliminar (trash icon): hover → `--danger`, llama `DELETE /documentos/{id}` con confirm()
+   - Estado vacío con icono centrado y texto guía
+
+### Verificación
+- TypeScript sin errores (`npx tsc --noEmit`) ✅
+- Build de producción sin errores (`npx next build`) ✅
+- Rutas registradas en build: `/documentos` → estático (SSG) ✅
+- Backend OpenAPI: `/temas` GET presente ✅
+- Dev server responde 200 en `/documentos` ✅

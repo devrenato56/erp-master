@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/supabase/session-context";
+import { Sidebar } from "@/components/sidebar";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { session, loading } = useSession();
@@ -31,5 +32,12 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
   if (!session) return null;
 
-  return <>{children}</>;
+  return (
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar />
+      <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
+        {children}
+      </main>
+    </div>
+  );
 }
