@@ -7,6 +7,7 @@ import {
   FileText, Pencil, Check, X, Trash2, AlertCircle,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useBreakpoint } from "@/lib/use-breakpoint";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -248,6 +249,7 @@ function SeccionPerfil({ perfil, onNombreActualizado }: {
 // ---------------------------------------------------------------------------
 
 function SeccionProgreso({ progreso }: { progreso: Progreso }) {
+  const { isMobile } = useBreakpoint();
   const stats = [
     { label: "Temas estudiados", value: String(progreso.temas_estudiados) },
     { label: "Evaluaciones realizadas", value: String(progreso.evaluaciones_realizadas) },
@@ -265,7 +267,7 @@ function SeccionProgreso({ progreso }: { progreso: Progreso }) {
   return (
     <div>
       <SectionLabel>Resumen de actividad</SectionLabel>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "12px" }}>
         {stats.map((s) => (
           <div key={s.label} style={{
             border: "1px solid var(--border)", borderRadius: "var(--radius-md)",
@@ -543,6 +545,7 @@ function SeccionDocumentos({ documentos, onEliminar }: {
 // ---------------------------------------------------------------------------
 
 export default function PerfilPage() {
+  const { isMobile } = useBreakpoint();
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [progreso, setProgreso] = useState<Progreso | null>(null);
   const [sesiones, setSesiones] = useState<SesionHistorial[]>([]);
@@ -588,7 +591,7 @@ export default function PerfilPage() {
   }
 
   return (
-    <div style={{ padding: "40px 48px" }}>
+    <div style={{ padding: isMobile ? "24px 16px" : "40px 48px" }}>
       <div style={{ maxWidth: "760px", margin: "0 auto" }}>
 
         {/* Header */}

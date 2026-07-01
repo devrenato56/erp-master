@@ -16,7 +16,7 @@ const NAV_CUENTA = [
   { href: "/perfil", label: "Perfil", icon: User },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useSession();
@@ -78,7 +78,7 @@ export function Sidebar() {
               label={label}
               icon={<Icon size={15} />}
               active={active}
-              onClick={() => router.push(href)}
+              onClick={() => { router.push(href); onClose?.(); }}
             />
           );
         })}
@@ -107,7 +107,7 @@ export function Sidebar() {
               label={label}
               icon={<Icon size={15} />}
               active={active}
-              onClick={() => router.push(href)}
+              onClick={() => { router.push(href); onClose?.(); }}
             />
           );
         })}

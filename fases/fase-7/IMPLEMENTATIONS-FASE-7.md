@@ -123,3 +123,77 @@ Casos verificados: 6/6 ataques detectados, 3/3 mensajes legítimos que pasan lim
 
 - `backend/.env.*` + `frontend/.env` + `frontend/.env.*` con excepciones `!*.env.example`.
 - `backend/**/__pycache__/`, `*.pyc`, `.DS_Store`, `Thumbs.db`.
+
+---
+
+## Bloque 3 — Usabilidad (RNF-09, RNF-10, RNF-11)
+
+### RNF-09 — Responsividad (mobile ≥ 320px, tablet ≥ 768px)
+
+**`frontend/lib/use-breakpoint.ts`** — hook creado.
+
+```typescript
+// Breakpoints: isMobile < 768, isTablet 768-1023, isDesktop ≥ 1024
+export function useBreakpoint(): Breakpoint
+```
+
+- Se inicializa como desktop (SSR-safe) y se ajusta en `useEffect` con `window.addEventListener("resize", update)`.
+- Limpia el listener al desmontar. Sin dependencias externas.
+
+**`frontend/app/(protected)/layout.tsx`** — reescrito con drawer mobile.
+
+- Desktop (`!isMobile`): `<Sidebar />` en fila flex como antes.
+- Mobile: topbar sticky con botón hamburger (`<Menu size={18} />`) + overlay backdrop (`rgba(0,0,0,0.6)`, `zIndex:40`) + sidebar como drawer (`position:fixed, left:0, zIndex:50`).
+- `useEffect` cierra el drawer al cambiar de mobile a desktop.
+- `<Sidebar onClose={() => setSidebarOpen(false)} />` — el sidebar cierra el drawer tras navegar.
+
+**`frontend/components/sidebar.tsx`** — prop `onClose?: () => void` añadida.
+
+- Llamada en los `onClick` de `NavItem` y `NAV_CUENTA` después de `router.push(href)`.
+
+**`frontend/app/(protected)/documentos/page.tsx`** — tabla responsive.
+
+```typescript
+const cols = isMobile
+  ? "1fr 40px"                         // solo nombre + eliminar
+  : isTablet
+  ? "1fr 100px 110px 40px"             // + visibilidad + estado
+  : "1fr 160px 100px 110px 90px 40px"; // + tema + fecha (desktop completo)
+
+const headers = isMobile
+  ? ["Archivo", ""]
+  : isTablet
+  ? ["Archivo", "Visibilidad", "Estado", ""]
+  : ["Archivo", "Tema", "Visibilidad", "Estado", "Subido", ""];
+```
+
+- Cabecera y `DocRow` usan `cols` variable (mismo valor → alineación garantizada).
+- `DocRow` recibe `cols`, `isMobile`, `isTablet` como props y oculta columnas condicionalmente con `{!isMobile && ...}` / `{!isMobile && !isTablet && ...}`.
+- Padding: `isMobile ? "24px 16px" : "40px 48px"`.
+
+**`frontend/app/(protected)/perfil/page.tsx`** — grid de stats y padding responsive.
+
+- Stats grid: `isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)"` — en mobile muestra 2 × 2 en lugar de desbordarse.
+- Padding outer: `isMobile ? "24px 16px" : "40px 48px"`.
+
+### RNF-10 — Mensajes de error inline (sin `alert()`)
+
+**`frontend/app/(protected)/documentos/page.tsx`**
+
+- Reemplazado `alert("No se pudo eliminar...")` por estado `errorEliminar: string | null`.
+- Mostrado como `<p style={{ color: "var(--danger)" }}>` justo antes de la tabla.
+- Se limpia en cada intento de eliminación (`setErrorEliminar(null)`). ✅
+
+### RNF-11 — Estados de carga visibles
+
+Auditados todos los componentes de datos:
+
+| Página | Estado cargando |
+|---|---|
+| `documentos` | `"Cargando..."` en celda de tabla con `cargando` state ✅ |
+| `perfil` | Spinner centrado "Cargando perfil…" mientras `cargando` ✅ |
+| `evaluaciones` | Loading state con mensaje "Cargando evaluaciones…" ✅ |
+| `chat` | Burbuja de typing durante streaming ✅ |
+| `dashboard` | Stats con `—` mientras cargan ✅ |
+
+Ningún componente muestra datos vacíos sin indicación de estado. ✅

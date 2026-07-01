@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload, Trash2, ChevronUp, ChevronDown, FileText } from "lucide-react";
 import { apiFetch, apiFetchForm } from "@/lib/api";
+import { useBreakpoint } from "@/lib/use-breakpoint";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -326,6 +327,8 @@ export default function DocumentosPage() {
   const [mostrarSubida, setMostrarSubida] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
   const [errorGlobal, setErrorGlobal] = useState<string | null>(null);
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
+  const { isMobile, isTablet } = useBreakpoint();
 
   const temaMap = Object.fromEntries(temas.map((t) => [t.id, t.nombre]));
 
@@ -345,11 +348,12 @@ export default function DocumentosPage() {
   async function handleEliminar(id: string) {
     if (!confirm("¿Eliminar este documento? Esta acción no se puede deshacer.")) return;
     setEliminando(id);
+    setErrorEliminar(null);
     try {
       await apiFetch(`/documentos/${id}`, { method: "DELETE" });
       setDocs((prev) => prev.filter((d) => d.id !== id));
-    } catch (err) {
-      alert((err as Error).message);
+    } catch {
+      setErrorEliminar("No se pudo eliminar el documento. Intentá de nuevo.");
     } finally {
       setEliminando(null);
     }
@@ -365,8 +369,20 @@ export default function DocumentosPage() {
   const propios = docs.filter((d) => d.visibilidad === "privado" || d.estado_moderacion !== "aprobado" || true);
   const compartidos = docs.filter((d) => d.visibilidad === "compartido");
 
+  // Columnas visibles según breakpoint
+  const cols = isMobile
+    ? "1fr 40px"
+    : isTablet
+    ? "1fr 100px 110px 40px"
+    : "1fr 160px 100px 110px 90px 40px";
+  const headers = isMobile
+    ? ["Archivo", ""]
+    : isTablet
+    ? ["Archivo", "Visibilidad", "Estado", ""]
+    : ["Archivo", "Tema", "Visibilidad", "Estado", "Subido", ""];
+
   return (
-    <div style={{ padding: "40px 48px", maxWidth: "960px" }}>
+    <div style={{ padding: isMobile ? "24px 16px" : "40px 48px", maxWidth: "960px" }}>
       {/* Header */}
       <div style={{ marginBottom: "32px" }}>
         <p
@@ -457,9 +473,12 @@ export default function DocumentosPage() {
         />
       )}
 
-      {/* Error global */}
+      {/* Errores */}
       {errorGlobal && (
         <p style={{ fontSize: "13px", color: "var(--danger)", marginBottom: "16px" }}>{errorGlobal}</p>
+      )}
+      {errorEliminar && (
+        <p style={{ fontSize: "13px", color: "var(--danger)", marginBottom: "16px" }}>{errorEliminar}</p>
       )}
 
       {/* Tabla de documentos */}
@@ -474,13 +493,13 @@ export default function DocumentosPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 160px 100px 110px 90px 40px",
+            gridTemplateColumns: cols,
             padding: "10px 16px",
             backgroundColor: "var(--bg-surface)",
             borderBottom: "1px solid var(--border)",
           }}
         >
-          {["Archivo", "Tema", "Visibilidad", "Estado", "Subido", ""].map((col) => (
+          {headers.map((col) => (
             <span
               key={col}
               style={{
@@ -520,6 +539,9 @@ export default function DocumentosPage() {
               isLast={i === docs.length - 1}
               eliminando={eliminando === doc.id}
               onEliminar={() => handleEliminar(doc.id)}
+              cols={cols}
+              isMobile={isMobile}
+              isTablet={isTablet}
             />
           ))
         )}
@@ -538,12 +560,18 @@ function DocRow({
   isLast,
   eliminando,
   onEliminar,
+  cols,
+  isMobile,
+  isTablet,
 }: {
   doc: Documento;
   temaNombre: string;
   isLast: boolean;
   eliminando: boolean;
   onEliminar: () => void;
+  cols: string;
+  isMobile: boolean;
+  isTablet: boolean;
 }) {
   const fecha = new Date(doc.subido_en).toLocaleDateString("es-PE", {
     day: "2-digit",
@@ -554,7 +582,7 @@ function DocRow({
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr 160px 100px 110px 90px 40px",
+        gridTemplateColumns: cols,
         padding: "12px 16px",
         borderBottom: isLast ? "none" : "1px solid var(--border)",
         alignItems: "center",
@@ -580,38 +608,44 @@ function DocRow({
         </span>
       </div>
 
-      {/* Tema */}
-      <span
-        style={{
-          fontSize: "13px",
-          color: "var(--text-secondary)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={temaNombre}
-      >
-        {temaNombre}
-      </span>
+      {/* Tema — solo desktop */}
+      {!isMobile && !isTablet && (
+        <span
+          style={{
+            fontSize: "13px",
+            color: "var(--text-secondary)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={temaNombre}
+        >
+          {temaNombre}
+        </span>
+      )}
 
-      {/* Visibilidad */}
-      <BadgeVisibilidad visibilidad={doc.visibilidad} />
+      {/* Visibilidad — tablet y desktop */}
+      {!isMobile && <BadgeVisibilidad visibilidad={doc.visibilidad} />}
 
-      {/* Estado moderación */}
-      <div>
-        <BadgeEstado estado={doc.estado_moderacion} />
-        {doc.motivo_rechazo && (
-          <p
-            style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px", lineHeight: 1.3 }}
-            title={doc.motivo_rechazo}
-          >
-            {doc.motivo_rechazo.slice(0, 40)}…
-          </p>
-        )}
-      </div>
+      {/* Estado moderación — tablet y desktop */}
+      {!isMobile && (
+        <div>
+          <BadgeEstado estado={doc.estado_moderacion} />
+          {doc.motivo_rechazo && (
+            <p
+              style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px", lineHeight: 1.3 }}
+              title={doc.motivo_rechazo}
+            >
+              {doc.motivo_rechazo.slice(0, 40)}…
+            </p>
+          )}
+        </div>
+      )}
 
-      {/* Fecha */}
-      <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{fecha}</span>
+      {/* Fecha — solo desktop */}
+      {!isMobile && !isTablet && (
+        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{fecha}</span>
+      )}
 
       {/* Eliminar */}
       <button
@@ -622,7 +656,7 @@ function DocRow({
           background: "none",
           border: "none",
           cursor: eliminando ? "not-allowed" : "pointer",
-          color: eliminando ? "var(--text-muted)" : "var(--text-muted)",
+          color: "var(--text-muted)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
