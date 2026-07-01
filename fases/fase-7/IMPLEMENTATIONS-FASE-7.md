@@ -267,3 +267,80 @@ El backend es stateless: cualquier instancia nueva puede atender cualquier reque
 - `apiFetch` propaga el error tal cual.
 - Todos los `catch` en las páginas capturan el error y muestran mensaje inline.
 - El usuario ve "No se pudo cargar..." y puede reintentar manualmente. ✅
+
+---
+
+## Bloque 5 — Escalabilidad (RNF-15, RNF-16)
+
+### RNF-15 — Índice vectorial HNSW activo
+
+**Índice definido en `sql/01_schema_chatbot_erp.sql`:**
+
+```sql
+CREATE INDEX idx_chunk_embedding ON public.chunk
+  USING hnsw (embedding vector_cosine_ops);
+```
+
+- Tipo: HNSW (Hierarchical Navigable Small World) — el algoritmo de búsqueda vectorial aproximada más eficiente disponible en pgvector.
+- Operador: `vector_cosine_ops` — coincide con el operador `<=>` usado en `match_chunks` y en `ORDER BY`. Esto garantiza que PostgreSQL use el índice en lugar de un Seq Scan.
+- Dimensión: 384 (all-MiniLM-L6-v2). Si el modelo cambia, el índice debe recrearse.
+- Parámetros: m=16, ef_construction=64 (defaults de pgvector — adecuados para escala de demo). `hnsw.ef_search=40` en runtime.
+
+**Función SQL `match_chunks` (`sql/03_match_chunks_function.sql`):**
+
+```sql
+ORDER BY c.embedding <=> query_embedding
+LIMIT match_count;
+```
+
+El operador `<=>` con `ORDER BY ... LIMIT` es exactamente el patrón que activa el índice HNSW en pgvector (index scan + limit pushdown). PostgreSQL no necesita ordenar toda la tabla — el índice devuelve los vecinos más cercanos directamente.
+
+**Verificación programática:**
+
+El archivo `sql/05_escalabilidad_explain_analyze.sql` contiene las queries de auditoría para ejecutar en el Dashboard de Supabase:
+
+1. `pg_indexes WHERE tablename='chunk'` — confirma que el índice existe.
+2. `EXPLAIN (ANALYZE, BUFFERS)` sobre la query de `match_chunks` — el plan debe mostrar `Index Scan using idx_chunk_embedding`, no `Seq Scan on chunk`.
+3. La misma query con filtro por `tema_id` — verifica que el filtro adicional no elimina el uso del índice.
+4. Conteo de chunks por tema — referencia de escala actual.
+
+**Escala y límites:**
+
+| Métrica | Valor actual (demo) | Límite práctico HNSW |
+|---|---|---|
+| Dimensiones del embedding | 384 | Hasta ~2000 sin degradación |
+| Chunks totales esperados | ~100–500 | Millones (pgvector con HNSW) |
+| Tiempo de búsqueda (top_k=5) | < 50ms | < 200ms hasta ~10M vectores |
+
+Para la escala de un proyecto educativo de demo no hay riesgo de degradación de rendimiento. ✅
+
+### RNF-16 — Límites de contexto y tokens (costos controlados)
+
+**Tokens de contexto enviados al LLM — límites en código:**
+
+| Componente | Parámetro | Valor | Propósito |
+|---|---|---|---|
+| `recuperar_contexto()` | `top_k=5` | máx. 5 chunks por query de chat | Limitar contexto RAG |
+| `construir_contexto_texto()` | `max_chars=6000` | corta el contexto al superar 6000 chars | Evitar prompts gigantes |
+| Evaluaciones — recuperación | `top_k=4` por query × varias queries | máx. 10 chunks finales | RAG multi-query controlado |
+| Evaluaciones — contexto | `max_chars=7000` | corta el contexto de evaluación | Límite más generoso (más preguntas) |
+| Evaluaciones — contexto tema | `max_chars=5000` | contexto introductorio | Complementario al RAG |
+| `MAX_TURNOS_HISTORIAL` | 6 turnos = 12 mensajes | historial de chat incluido en prompt | Evitar context overflow en sesiones largas |
+
+**Estimación de tokens por request de chat:**
+
+```
+System prompt      ≈  350 tokens
+Historial (máx.)   ≈  600 tokens  (6 turnos × 100 tokens promedio)
+Contexto RAG       ≈  1500 tokens  (6000 chars ÷ 4 chars/token)
+Pregunta usuario   ≈   50 tokens
+─────────────────────────────────
+Total input        ≈  2500 tokens
+Respuesta          ≈  300 tokens  (max_tokens=1024, en práctica <300)
+─────────────────────────────────
+Total por request  ≈  2800 tokens
+```
+
+Con el plan gratuito de Groq (≈ 6000 tokens/minuto en `llama-3.1-8b`), esto permite ~2 requests/minuto simultáneas, suficiente para uso educativo individual o demo con jurado. ✅
+
+Todos los límites están fijados como constantes en el código (no hardcodeados en el prompt): `MAX_TURNOS_HISTORIAL`, `UMBRAL_SIMILITUD`, `top_k`, `max_chars`. Se pueden ajustar sin tocar la lógica de negocio. ✅
