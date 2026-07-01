@@ -215,3 +215,71 @@ Permite auditar en logs cuántas preguntas fueron rechazadas antes de llegar al 
 - Proveedor inválido: `LLMError` inmediato (sin retry) ✅
 - Timeout simulado × 2 → recuperación exitosa en el 3er intento ✅
 - Timeout permanente × 3 → `LLMError` con mensaje amigable (técnico en log) ✅
+
+---
+
+## Bloque 6 — Interfaz de chat (frontend)
+
+### Archivos creados / modificados
+
+**`frontend/app/(protected)/chat/page.tsx`** *(reescritura)*
+
+Página de selección de tema antes de iniciar una conversación:
+- Carga `GET /temas` al montar el componente.
+- Grid de cards `auto-fill / minmax(240px, 1fr)` — se adapta al ancho disponible.
+- Cada card muestra: ícono `BookOpen`, badge "Oficial" (`--accent-muted`) si `es_predefinido`, nombre y descripción (clamp 2 líneas).
+- Hover: `border-color: var(--accent)` + fondo `--bg-surface-hover` + ícono en `--accent`. Solo una card se resalta a la vez.
+- Al hacer clic: `POST /chat/sesiones` con `tema_id` → redirige a `/chat/{sesion_id}`.
+- Durante la creación: la card en cargando muestra "Iniciando...", las demás se desactivan con `opacity: 0.45`.
+- Estado vacío de carga: 4 cards skeleton con `opacity: 0.5`.
+- Errores de red o de API mostrados bajo el título.
+
+**`frontend/app/(protected)/chat/[sesionId]/page.tsx`** *(nuevo)*
+
+Interfaz de conversación estilo editorial (no burbujas WhatsApp):
+
+*Estructura de layout:*
+- `display: flex / flex-direction: column / height: 100vh / overflow: hidden` — tres zonas fijas: header, área de scroll, input fijo abajo.
+
+*Header:*
+- Breadcrumb `← Temas / Sesión activa` + ID truncado a 8 chars (monospace) a la derecha.
+- `border-bottom: 1px solid var(--border)`, fondo `--bg-surface`.
+
+*Mensajes del usuario:*
+- Alineados a la derecha (`justify-content: flex-end`), max-width 72%.
+- Burbuja con `--bg-surface-hover` + borde fino — única burbuja en toda la UI, distingue al usuario del asistente.
+
+*Mensajes del asistente (estilo editorial):*
+- Sin burbuja. Texto directo sobre `--bg-base`.
+- Indicador visual: punto `6×6px` en `--accent` (gris si `fuera_de_alcance`).
+- Label "ASISTENTE" en mayúsculas, `11px`, `--accent` (gris si fuera de alcance).
+- `white-space: pre-wrap` para respetar saltos de línea del LLM.
+- `fuera_de_alcance=true` → color `--text-secondary` en lugar de `--text-primary`.
+
+*Indicador de carga:*
+- Misma estructura visual que el mensaje del asistente pero con tres puntos animados (`@keyframes pulse`, desfase `0.2s` entre puntos).
+
+*Input:*
+- `<textarea>` autoexpandible (altura ajustada vía JS al contenido, máximo 160px).
+- `Enter` envía, `Shift+Enter` inserta nueva línea.
+- Botón `Send` desactivado (verde tenue) cuando el campo está vacío o hay envío en progreso.
+- Foco en el contenedor (`onFocusCapture`) cambia `border-color` a `--border-strong`.
+
+*Flujo de envío optimista:*
+- El mensaje del usuario aparece inmediatamente en la UI antes de que llegue la respuesta del backend.
+- Si el backend falla, el mensaje optimista se elimina y el texto vuelve al textarea.
+- Error de envío mostrado en banner `--danger` encima del input (no bloquea la sesión).
+
+*Scroll:* `useEffect` sobre `[mensajes, enviando]` hace `scrollIntoView({ behavior: "smooth" })` al `<div ref={bottomRef} />` al final del listado.
+
+**`frontend/components/sidebar.tsx`** — active matching actualizado:
+```ts
+const active = pathname === href || pathname.startsWith(href + "/");
+```
+Ahora `/chat/[sesionId]` mantiene el item "Chat" del sidebar resaltado.
+
+### Verificación
+- TypeScript: `npx tsc --noEmit` sin errores ✅
+- `GET /chat` → HTTP 200 ✅
+- `GET /chat/[sesionId]` → HTTP 200 ✅
+- Sidebar item Chat activo en `/chat` y en `/chat/{id}` ✅

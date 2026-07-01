@@ -70,7 +70,7 @@ export function Sidebar() {
       {/* Nav principal */}
       <nav style={{ flex: 1, padding: "12px 8px", display: "flex", flexDirection: "column", gap: "2px", overflowY: "auto" }}>
         {NAV_MAIN.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <NavItem
               key={href}
