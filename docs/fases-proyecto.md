@@ -12,10 +12,24 @@ Registro del avance por fases del proyecto.
 | 5 | Evaluaciones (generación, calificación automática) | ✅ Completada |
 | 6 | Perfil de usuario e historial | ✅ Completada |
 | 7 | Endurecimiento (RNF) y pulido de UI | ✅ Completada |
-| 8 | Contingencia y plan B (Ollama, Supabase local) | 🔲 Pendiente |
-| 9 | Documentación final y entrega | 🔲 Pendiente |
+| 8 | Contingencia y plan B (Ollama, Supabase local) | ✅ Completada |
+| 9 | Documentación final y entrega | ✅ Completada |
 
 ## Notas por fase
+
+### Fase 9 — Completada
+
+- **README.md** (raíz) reescrito al estado final: estructura real del repo, stack completo, instrucciones de puesta en marcha revisadas, sección de seguridad, plan de contingencia condensado.
+- Toda la documentación verificada: `REQUIREMENTS.md`, `fases-proyecto.md`, `contingencia-plan-b.md`, `diagrama_er_chatbot_erp.html`, `IMPLEMENTATIONS-*.md` de fases 3–9, archivos SQL comentados, `.env.example` y `.env.local.example`.
+- Checklist de estado entregable: código sin secretos hardcodeados, sin debug prints, padding responsive en todas las páginas, dashboard limpio, logging centralizado, handler 503 global.
+- Pendientes operativos documentados (no son código): aplicar 2 archivos SQL en Supabase Dashboard, ejecutar ensayo de demo, verificar en Chrome/Edge/Firefox.
+
+### Fase 8 — Completada
+
+- **Script de semilla** (`scripts/seed_demo.py`): crea usuario de demo `demo@chaterp.test` vía Supabase Admin API, 3 sesiones de chat con historial real y 1 evaluación completada con puntaje ~15/20. Idempotente. Funciona con plan A (nube) y plan B (local) cambiando solo el `.env` activo.
+- **Entorno plan B**: Supabase CLI + Docker Desktop para instancia local; Ollama con `llama3.1:8b` (fallback `llama3.2:3b` si la laptop es lenta). El backend ya soportaba Ollama desde Fase 4 — sin cambios de código.
+- **Documentación** (`docs/contingencia-plan-b.md`): instrucciones paso a paso para instalar y configurar el entorno local, plantillas de `.env.plan-a` y `.env.plan-b`, checklist del día de la feria para plan A y plan B, guión de demo con tiempos estimados y manejo de momentos de espera.
+- **Cambio plan A → plan B**: < 3 minutos con `supabase` y `ollama` ya instalados (solo `copy .env.plan-b .env` + arrancar servicios).
 
 ### Fase 7 — Completada
 
