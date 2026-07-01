@@ -42,3 +42,54 @@
 - `GET /perfil/evaluaciones` ✅
 - `GET /perfil/documentos` ✅
 - `DELETE /perfil/documentos/{documento_id}` ✅
+
+---
+
+## Bloque 2 — Frontend: pantalla de perfil
+
+### Archivo modificado
+
+**`frontend/app/(protected)/perfil/page.tsx`** *(reescrito desde placeholder)*
+
+#### Estructura de la página
+
+Todas las secciones bajo `/perfil`, separadas por divisores de `1px`, en columna central de `maxWidth: 760px`.
+
+**Sección: Mi cuenta (`SeccionPerfil`)**
+- Tarjeta con borde fino, 3 campos: nombre, correo y fecha de registro.
+- Edición de nombre inline: botón lápiz (`Pencil`) abre un `<input>` en el mismo lugar con botones check/X flotando a la derecha. Enter confirma, Escape cancela. `PATCH /perfil` en `guardando` state; error inline bajo el campo.
+- Correo y fecha solo lectura (no editables desde el cliente).
+
+**Sección: Resumen de actividad (`SeccionProgreso`)**
+- Grid de 4 cards estilo hackO.dev: número grande 28px + label 11px uppercase + sub-texto opcional.
+- Stats: Temas estudiados / Evaluaciones realizadas / Puntaje promedio /20 / Mejor puntaje /20 (con nombre del tema).
+- Valores `null` muestran "—".
+
+**Sección: Historial de conversaciones (`SeccionSesiones`)**
+- Lista compacta tipo Vercel (borde único exterior, filas separadas por `1px`).
+- Cada fila: icono `MessageSquare` + nombre del tema + fecha alineada a la derecha.
+- Clickeable → `router.push(/chat/${id})`.
+- Estado vacío: icono + texto en `--text-muted` + CTA "Ir al chat" en `--accent`.
+
+**Sección: Historial de evaluaciones (`SeccionEvaluaciones`)**
+- Misma lista compacta: `CheckCircle`/`XCircle` en `--accent`/`--danger` + nombre del tema + puntaje /20 en color reactivo + fecha.
+- Clickeable → `router.push(/evaluaciones/${intento_id}/resultados)`.
+- Estado vacío con CTA "Hacer una evaluación".
+
+**Sección: Mis documentos (`SeccionDocumentos`)**
+- Lista con badges de formato (uppercase muted), badge de estado con colores del design system (aprobado=accent/rechazado=danger/pendiente=muted) y fecha.
+- Botón eliminar (`Trash2`) con hover rojo + confirmación `window.confirm` + spinner inline mientras elimina. Eliminación optimista: quita la fila del estado local sin recargar.
+- Motivo de rechazo mostrado inline bajo la fila cuando `estado_moderacion === "rechazado"`.
+- Estado vacío con CTA "Subir un documento".
+
+#### Estados vacíos (`EmptyState`)
+
+Componente compartido: borde dashed + icono 50% opacidad + texto en `--text-muted` + botón CTA en `--accent`. Tres instancias: sin sesiones / sin evaluaciones / sin documentos.
+
+#### Carga de datos
+
+`Promise.all` de 5 llamadas paralelas en `useEffect`: `/perfil`, `/perfil/progreso`, `/perfil/sesiones`, `/perfil/evaluaciones`, `/perfil/documentos`. Estado de `cargando` global con texto centrado; `error` con ícono `AlertCircle`.
+
+### Verificación
+
+TypeScript: `npx tsc --noEmit` sin errores en el archivo ✅
