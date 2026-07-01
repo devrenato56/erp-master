@@ -304,3 +304,46 @@ Página completa de gestión de documentos con tres secciones:
 - Rutas registradas en build: `/documentos` → estático (SSG) ✅
 - Backend OpenAPI: `/temas` GET presente ✅
 - Dev server responde 200 en `/documentos` ✅
+
+---
+
+## Bloque 8 — Cierre de Fase 3
+
+### Verificación de seguridad
+
+**`service_role key` en frontend**
+- Búsqueda exhaustiva en todos los `.ts` / `.tsx` del frontend (excl. `node_modules`, `.next`): ✅ No aparece ninguna referencia a `service_role` ni la key hardcodeada.
+- La key solo existe en `backend/.env` y se usa exclusivamente en `backend/app/core/supabase_client.py`.
+
+**RLS — tablas**
+
+| Tabla | Usuario no autenticado (anon) | Resultado |
+|---|---|---|
+| `tema` | 0 filas devueltas | ✅ Correcto |
+| `documento` | 1 fila devuelta (`compartido+aprobado`) | ⚠️ Ver hallazgo abajo |
+| `chunk` | 3 filas devueltas (del doc `compartido+aprobado`) | ⚠️ Ver hallazgo abajo |
+
+**Hallazgo RLS**: la política original de `documento` y `chunk` no incluía `auth.role() = 'authenticated'` en la condición de visibilidad compartida. Esto permitía que usuarios anon (no logueados) vieran documentos públicos aprobados — incorrecto para una plataforma que requiere login.
+
+**Fix**: `sql/02_rls_fix_autenticados.sql` — reemplaza ambas políticas añadiendo `auth.role() = 'authenticated'` como condición obligatoria. Debe aplicarse en **Supabase Dashboard → SQL Editor**.
+
+**Docs privados de otro usuario**: ✅ No visibles en ningún escenario — política correcta desde el inicio.
+
+**Storage**: las políticas de Storage usan `(storage.foldername(name))[1] = auth.uid()::text`, lo que garantiza que cada usuario solo puede leer y eliminar archivos dentro de su propia carpeta. Un usuario anon o autenticado no puede acceder al archivo original de un documento privado ajeno.
+
+### Archivos creados en este bloque
+
+**`sql/02_rls_fix_autenticados.sql`** *(nuevo)*
+SQL que corrige las políticas RLS de `documento` y `chunk` para restringir el acceso a usuarios autenticados en todos los casos. Pendiente de aplicar en Supabase Dashboard.
+
+**`docs/fases-proyecto.md`** *(nuevo)*
+Tabla de estado de las 10 fases del proyecto. Fases 0, 2 y 3 marcadas como completadas.
+
+### Condición de salida de la Fase 3 — cumplida
+- ✅ Pipeline completo: PDF → extracción → chunking → embeddings → moderación → Supabase
+- ✅ 5 temas predefinidos con contenido real (119 chunks del PDF de investigación UNI)
+- ✅ Sistema de moderación distingue contenido relevante de no relevante
+- ✅ Endpoints de subida, listado y eliminación funcionan con JWT
+- ✅ Frontend: sidebar + página de documentos con subida, listado y eliminación
+- ✅ `service_role key` nunca expuesta al frontend
+- ⚠️ Fix RLS documentado en `sql/02_rls_fix_autenticados.sql` — aplicar antes de producción
