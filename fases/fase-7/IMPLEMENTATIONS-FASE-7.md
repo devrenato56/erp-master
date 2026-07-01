@@ -344,3 +344,91 @@ Total por request  ≈  2800 tokens
 Con el plan gratuito de Groq (≈ 6000 tokens/minuto en `llama-3.1-8b`), esto permite ~2 requests/minuto simultáneas, suficiente para uso educativo individual o demo con jurado. ✅
 
 Todos los límites están fijados como constantes en el código (no hardcodeados en el prompt): `MAX_TURNOS_HISTORIAL`, `UMBRAL_SIMILITUD`, `top_k`, `max_chars`. Se pueden ajustar sin tocar la lógica de negocio. ✅
+
+---
+
+## Bloque 6 — Costos y logging (RNF-17, RNF-18)
+
+### RNF-17 — Control de costos: historial y contexto limitados
+
+**Verificación del límite de historial en `chat/service.py`:**
+
+```python
+MAX_TURNOS_HISTORIAL = 6
+turnos_recientes = historial[-(MAX_TURNOS_HISTORIAL * 2):]
+```
+
+- `historial` contiene todos los mensajes de la sesión (alternando usuario/asistente).
+- `-(6 * 2) = -12` → siempre se incluyen como máximo los últimos 12 mensajes.
+- Una sesión de 100 turnos envía al LLM exactamente los mismos tokens de historial que una de 6 turnos. El costo de tokens de historial no crece sin control. ✅
+
+**Estimación de tokens por tipo de operación:**
+
+| Operación | Tokens input | Tokens output | Total estimado |
+|---|---|---|---|
+| Chat RAG (request típico) | ~2500 | ~300 | ~2800 |
+| Generación evaluación (6 preguntas) | ~3000 | ~1500 | ~4500 |
+| Generación evaluación (8 preguntas) | ~3000 | ~2000 | ~5000 |
+| Calificación pregunta abierta | ~800 | ~200 | ~1000 |
+| Moderación documento | ~500 | ~100 | ~600 |
+
+Plan gratuito Groq (`llama-3.3-70b-versatile`): ~6000 tokens/minuto. Para uso individual o demo con jurado (< 5 requests/minuto) el plan gratuito es suficiente. ✅
+
+**Groq como plan A, Ollama como plan B:**
+
+`LLM_PROVIDER` en `.env` controla el proveedor. Cambiar de Groq a Ollama no requiere modificar ningún código — solo la variable de entorno. Costo de Ollama: $0 (local). ✅
+
+### RNF-18 — Logging estructurado: trazabilidad sin datos sensibles
+
+**Configuración centralizada añadida en `backend/app/main.py`:**
+
+```python
+logging.config.dictConfig({
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        }
+    },
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
+    "root": {"level": "INFO", "handlers": ["console"]},
+    "loggers": {
+        "httpx": {"level": "WARNING"},
+        "httpcore": {"level": "WARNING"},
+        "sentence_transformers": {"level": "WARNING"},
+    },
+})
+```
+
+- Formato legible: `2026-07-01 14:32:01 INFO     app.chat.service — Llamando LLM: tema=... chunks=3 historial=2 turnos`
+- Uvicorn captura stdout → visible en Render/Railway logs sin configuración adicional.
+- Librerías verbosas (`httpx`, `sentence_transformers`) silenciadas en WARNING para no saturar los logs.
+
+**Inventario de mensajes de log por módulo:**
+
+| Módulo | Nivel | Eventos registrados |
+|---|---|---|
+| `llm_provider` | INFO | Cada llamada exitosa: proveedor, modelo, intento, tokens, tiempo |
+| `llm_provider` | WARNING | Cada reintento: error, tiempo transcurrido |
+| `llm_provider` | ERROR | Todos los reintentos fallados |
+| `chat/service` | WARNING | Intento de prompt injection (primeros 120 chars) |
+| `chat/service` | INFO | Pregunta rechazada por fuera de alcance |
+| `chat/service` | INFO | Llamada al LLM: tema, chunks, turnos de historial |
+| `chat/retriever` | INFO | Resultado de búsqueda vectorial: chunks encontrados, umbral |
+| `chat/retriever` | ERROR | Fallo en `match_chunks` (Supabase caído) |
+| `evaluaciones/service` | INFO | Inicio de generación: tema, n_preguntas, chunks_usados |
+| `evaluaciones/service` | INFO | JSON de preguntas parseado OK |
+| `evaluaciones/service` | WARNING | JSON malformado en intento N |
+| `evaluaciones/service` | INFO | Evaluación persistida: id, n_preguntas |
+| `evaluaciones/service` | INFO/WARNING | Calificación abierta: puntaje / JSON malformado |
+| `base_conocimiento/extraccion` | WARNING | Fallback pypdf cuando Gemini Vision falla |
+| `base_conocimiento/moderacion` | WARNING/ERROR | Fallos en moderación LLM |
+| `main` | ERROR | Excepciones no manejadas con método + path |
+
+**Datos sensibles — ausencia verificada:**
+
+- Ningún log incluye tokens JWT, claves API ni contraseñas.
+- El contenido de los mensajes se trunca a 60–120 chars en los logs (`mensaje[:60]`, `mensaje[:120]`).
+- El contenido de los documentos no se loguea (solo `nombre_archivo` y `chunks_generados`). ✅

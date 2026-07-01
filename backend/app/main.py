@@ -1,4 +1,5 @@
 import logging
+import logging.config
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,32 @@ from app.temas.router import router as temas_router
 from app.chat.router import router as chat_router
 from app.evaluaciones.router import router as evaluaciones_router
 from app.perfil.router import router as perfil_router
+
+# Logging centralizado: formato legible + nivel INFO por defecto.
+# Uvicorn ya captura stdout, así que esto se ve en los logs de Render/Railway.
+logging.config.dictConfig({
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+        }
+    },
+    "root": {"level": "INFO", "handlers": ["console"]},
+    # Silenciar librerías verbosas que no aportan
+    "loggers": {
+        "httpx": {"level": "WARNING"},
+        "httpcore": {"level": "WARNING"},
+        "sentence_transformers": {"level": "WARNING"},
+    },
+})
 
 logger = logging.getLogger(__name__)
 
