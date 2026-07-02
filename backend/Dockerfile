@@ -13,6 +13,9 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 COPY backend/requirements.txt .
+# Instalar torch CPU-only primero (evita ~2GB de paquetes CUDA)
+RUN pip install --user --no-cache-dir torch==2.12.1 --index-url https://download.pytorch.org/whl/cpu
+# Instalar resto de dependencias; torch ya está instalado, pip lo salta
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # ------------------------
