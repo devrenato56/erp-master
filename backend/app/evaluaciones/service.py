@@ -368,6 +368,7 @@ def generar_evaluacion(
     tema_id: str,
     n_preguntas: int = 5,
     titulo: str | None = None,
+    user_id: str | None = None,
 ) -> EvaluacionGenerada:
     """
     Genera una evaluación para el tema dado:
@@ -390,7 +391,7 @@ def generar_evaluacion(
     todos_los_chunks: list = []
     vistos: set[str] = set()
     for q in queries:
-        chunks = recuperar_contexto(q, tema_id=tema_id, top_k=5, umbral=0.25)
+        chunks = recuperar_contexto(q, tema_id=tema_id, top_k=5, umbral=0.25, user_id=user_id)
         for c in chunks:
             if c.id not in vistos:
                 todos_los_chunks.append(c)
@@ -401,7 +402,7 @@ def generar_evaluacion(
         logger.warning("[EVAL] Sin chunks para tema=%s — usando corpus general", tema_id)
         fallback = recuperar_contexto(
             "sistemas ERP implementación gestión empresarial",
-            tema_id=None, top_k=6, umbral=0.20,
+            tema_id=None, top_k=6, umbral=0.20, user_id=user_id,
         )
         todos_los_chunks = fallback
 

@@ -148,7 +148,7 @@ async def generar(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "n_preguntas debe estar entre 3 y 15.")
 
     try:
-        ev = generar_evaluacion(body.tema_id, n_preguntas=body.n_preguntas)
+        ev = generar_evaluacion(body.tema_id, n_preguntas=body.n_preguntas, user_id=user_id)
     except RuntimeError as e:
         logger.error(
             "[EVAL] Sin chunks indexados — tema_id=%s error=%s",
