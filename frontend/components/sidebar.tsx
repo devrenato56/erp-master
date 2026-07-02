@@ -1,12 +1,14 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { MessageSquare, FileText, ClipboardList, LayoutDashboard, User, LogOut } from "lucide-react";
+import { MessageSquare, FileText, ClipboardList, LayoutDashboard, User, LogOut, BookOpen, Building2 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
 import { useSession } from "@/lib/supabase/session-context";
 
 const NAV_MAIN = [
   { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
+  { href: "/modulos", label: "Módulos", icon: BookOpen },
+  { href: "/empresa", label: "Mi empresa", icon: Building2 },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/evaluaciones", label: "Evaluaciones", icon: ClipboardList },
   { href: "/documentos", label: "Documentos", icon: FileText },

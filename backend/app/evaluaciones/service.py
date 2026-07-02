@@ -358,7 +358,9 @@ def calcular_puntaje_total(puntajes: list[float]) -> PuntajeConsolidado:
 class EvaluacionGenerada:
     evaluacion_id: str
     titulo: str
-    tema_id: str
+    tema_id: str | None
+    modulo_id: str | None
+    nivel: str              # 'tema' | 'modulo'
     preguntas: list[dict]   # incluye respuesta_correcta (solo para el backend)
 
 
@@ -446,6 +448,7 @@ def generar_evaluacion(
     eval_resp = supabase.table("evaluacion").insert({
         "tema_id": tema_id,
         "titulo": titulo_final,
+        "nivel": "tema",
     }).execute()
     evaluacion_id = eval_resp.data[0]["id"]
 
@@ -473,5 +476,116 @@ def generar_evaluacion(
         evaluacion_id=evaluacion_id,
         titulo=titulo_final,
         tema_id=tema_id,
+        modulo_id=None,
+        nivel="tema",
         preguntas=preguntas_guardadas,
+    )
+
+
+def generar_evaluacion_modulo(
+    modulo_id: str,
+    n_preguntas: int = 12,
+) -> EvaluacionGenerada:
+    """
+    Genera una evaluación final de módulo (nivel='modulo'):
+    - Recupera contexto de todo el corpus aprobado con queries orientadas al módulo.
+    - Genera n_preguntas (12-15) cubriendo los distintos sub-temas.
+    - Persiste con nivel='modulo', modulo_id, tema_id=None.
+
+    Lanza LLMError si el proveedor falla.
+    Lanza ValueError si el JSON del LLM sigue malformado tras el reintento.
+    Lanza RuntimeError si no hay chunks indexados.
+    """
+    # Obtener nombre del módulo para el prompt y el título
+    modulo_resp = supabase.table("modulo").select("nombre").eq("id", modulo_id).single().execute()
+    nombre_modulo = modulo_resp.data["nombre"] if modulo_resp.data else "Módulo"
+
+    # Recuperar contexto con queries variadas para cubrir todos los sub-temas
+    queries = [
+        "conceptos fundamentales y definiciones",
+        "implementación práctica y fases del proceso",
+        "beneficios riesgos y factores críticos de éxito",
+        "casos prácticos aplicaciones reales en empresas",
+    ]
+    todos_los_chunks: list = []
+    vistos: set[str] = set()
+    for q in queries:
+        chunks = recuperar_contexto(q, tema_id=None, top_k=5, umbral=0.28)
+        for c in chunks:
+            if c.id not in vistos:
+                todos_los_chunks.append(c)
+                vistos.add(c.id)
+
+    if not todos_los_chunks:
+        raise RuntimeError(
+            f"El módulo '{nombre_modulo}' no tiene contenido indexado. "
+            "Procesá los documentos del módulo primero."
+        )
+
+    todos_los_chunks.sort(key=lambda c: c.similitud, reverse=True)
+    chunks_usados = todos_los_chunks[:15]  # más contexto para evaluación de módulo
+    contexto = construir_contexto_texto(chunks_usados, max_chars=9000)
+
+    logger.info(
+        "[EVAL] Generando evaluación de módulo: modulo=%s n=%d chunks=%d",
+        modulo_id, n_preguntas, len(chunks_usados),
+    )
+
+    # Llamar al LLM con hasta 2 intentos
+    messages = _construir_prompt(n_preguntas, contexto)
+    preguntas_data: list[dict] | None = None
+    ultimo_error: Exception | None = None
+
+    for intento in range(1, 3):
+        try:
+            texto_llm = completar(messages, temperature=0.4, max_tokens=3500)
+            preguntas_data = _parsear_preguntas(texto_llm)
+            logger.info("[EVAL] JSON módulo OK en intento %d (%d preguntas)", intento, len(preguntas_data))
+            break
+        except ValueError as e:
+            ultimo_error = e
+            logger.warning("[EVAL] JSON módulo malformado intento %d: %s", intento, e)
+        except LLMError:
+            raise
+
+    if preguntas_data is None:
+        raise ValueError(
+            f"El LLM devolvió JSON inválido después de 2 intentos. Último error: {ultimo_error}"
+        )
+
+    # Persistir evaluación de nivel módulo
+    titulo_final = f"Evaluación Final — {nombre_modulo}"
+    eval_resp = supabase.table("evaluacion").insert({
+        "tema_id": None,
+        "modulo_id": modulo_id,
+        "titulo": titulo_final,
+        "nivel": "modulo",
+    }).execute()
+    evaluacion_id = eval_resp.data[0]["id"]
+
+    # Persistir preguntas
+    filas_preguntas = [
+        {
+            "evaluacion_id": evaluacion_id,
+            "tipo": p["tipo"],
+            "enunciado": p["enunciado"].strip(),
+            "opciones": p.get("opciones"),
+            "respuesta_correcta": p.get("respuesta_correcta"),
+        }
+        for p in preguntas_data
+    ]
+    preg_resp = supabase.table("pregunta").insert(filas_preguntas).execute()
+
+    logger.info(
+        "[EVAL] Evaluación de módulo persistida: id=%s preguntas=%d",
+        evaluacion_id, len(preg_resp.data),
+    )
+
+    return EvaluacionGenerada(
+        evaluacion_id=evaluacion_id,
+        titulo=titulo_final,
+        tema_id=None,
+        modulo_id=modulo_id,
+        nivel="modulo",
+        preguntas=preg_resp.data,
     )

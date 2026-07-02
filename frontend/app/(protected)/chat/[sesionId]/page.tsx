@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Send, ArrowLeft, AlertCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { apiFetch } from "@/lib/api";
@@ -229,6 +229,7 @@ export default function ConversacionPage({
 }) {
   const { sesionId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isMobile } = useBreakpoint();
 
   const [mensajes, setMensajes] = useState<MensajeConMeta[]>([]);
@@ -237,16 +238,25 @@ export default function ConversacionPage({
   const [texto, setTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+  const preguntaInicialEnviada = useRef(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Cargar historial inicial
+  // Cargar historial inicial; si hay ?q= y sesión nueva, enviar automáticamente
   useEffect(() => {
     apiFetch<Mensaje[]>(`/chat/sesiones/${sesionId}/mensajes`)
-      .then((msgs) => setMensajes(msgs))
+      .then((msgs) => {
+        setMensajes(msgs);
+        const q = searchParams.get("q");
+        if (msgs.length === 0 && q && !preguntaInicialEnviada.current) {
+          preguntaInicialEnviada.current = true;
+          enviarContenido(q);
+        }
+      })
       .catch(() => setError("No se pudo cargar la conversación."))
       .finally(() => setCargando(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sesionId]);
 
   // Scroll al fondo cuando lleguen nuevos mensajes
@@ -262,15 +272,13 @@ export default function ConversacionPage({
     ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
   }, [texto]);
 
-  async function handleEnviar() {
-    const contenido = texto.trim();
-    if (!contenido || enviando) return;
+  async function enviarContenido(contenido: string) {
+    if (!contenido.trim() || enviando) return;
 
     setTexto("");
     setErrorEnvio(null);
     setEnviando(true);
 
-    // Optimistic: agregar mensaje del usuario inmediatamente
     const msgUsuario: MensajeConMeta = {
       id: `temp-${Date.now()}`,
       rol_emisor: "usuario",
@@ -282,30 +290,30 @@ export default function ConversacionPage({
     try {
       const res = await apiFetch<EnviarMensajeResponse>(
         `/chat/sesiones/${sesionId}/mensajes`,
-        {
-          method: "POST",
-          body: JSON.stringify({ contenido }),
-        }
+        { method: "POST", body: JSON.stringify({ contenido }) }
       );
-
-      const msgAsistente: MensajeConMeta = {
-        id: res.mensaje_id,
-        rol_emisor: "asistente",
-        contenido: res.contenido,
-        enviado_en: new Date().toISOString(),
-        fuera_de_alcance: res.fuera_de_alcance,
-      };
-      setMensajes((prev) => [...prev, msgAsistente]);
+      setMensajes((prev) => [
+        ...prev,
+        {
+          id: res.mensaje_id,
+          rol_emisor: "asistente",
+          contenido: res.contenido,
+          enviado_en: new Date().toISOString(),
+          fuera_de_alcance: res.fuera_de_alcance,
+        },
+      ]);
     } catch (err) {
-      const msg = (err as Error & { status?: number }).message;
-      setErrorEnvio(msg);
-      // Quitar el mensaje optimista si el envío falló
+      setErrorEnvio((err as Error).message);
       setMensajes((prev) => prev.filter((m) => m.id !== msgUsuario.id));
       setTexto(contenido);
     } finally {
       setEnviando(false);
       textareaRef.current?.focus();
     }
+  }
+
+  function handleEnviar() {
+    enviarContenido(texto.trim());
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {

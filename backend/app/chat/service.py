@@ -4,7 +4,7 @@ import logging
 import re
 from dataclasses import dataclass
 
-from app.chat.retriever import recuperar_contexto, construir_contexto_texto
+from app.chat.retriever import recuperar_contexto, recuperar_contexto_caso, construir_contexto_texto
 from app.core.llm_provider import completar, LLMError
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,7 @@ def procesar_mensaje(
     mensaje: str,
     tema_id: str | None,
     historial: list[MensajeChat],
+    documento_caso_id: str | None = None,
 ) -> RespuestaChat:
     """
     Orquesta el flujo completo de RAG para un turno de chat:
@@ -90,8 +91,11 @@ def procesar_mensaje(
             chunks_usados=0,
         )
 
-    # 2. Recuperar contexto
-    chunks = recuperar_contexto(mensaje, tema_id=tema_id)
+    # 2. Recuperar contexto — combinado para casos de empresa, general para chats normales
+    if documento_caso_id:
+        chunks = recuperar_contexto_caso(mensaje, documento_id=documento_caso_id)
+    else:
+        chunks = recuperar_contexto(mensaje, tema_id=tema_id)
 
     # 3. Armar mensajes — con contexto si hay chunks, sin contexto (conocimiento general) si no
     if chunks:

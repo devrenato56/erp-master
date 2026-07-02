@@ -22,11 +22,13 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 class CrearSesionRequest(BaseModel):
     tema_id: str | None = None
+    caso_empresa_id: str | None = None
 
 
 class CrearSesionResponse(BaseModel):
     sesion_id: str
     tema_id: str | None
+    caso_empresa_id: str | None
     iniciada_en: str
 
 
@@ -51,6 +53,7 @@ class MensajeOut(BaseModel):
 class SesionOut(BaseModel):
     id: str
     tema_id: str | None
+    caso_empresa_id: str | None = None
     iniciada_en: str
     archivada: bool = False
 
@@ -73,7 +76,7 @@ def _verificar_sesion_propia(
     Por defecto bloquea sesiones con eliminada_en != NULL."""
     resp = (
         supabase.table("sesion_chat")
-        .select("id, usuario_id, tema_id, iniciada_en, archivada, eliminada_en")
+        .select("id, usuario_id, tema_id, caso_empresa_id, iniciada_en, archivada, eliminada_en")
         .eq("id", sesion_id)
         .single()
         .execute()
@@ -111,7 +114,9 @@ async def crear_sesion(
     body: CrearSesionRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    # Verificar que el tema existe (solo si se proporcionó uno)
+    if body.tema_id is not None and body.caso_empresa_id is not None:
+        raise HTTPException(status_code=422, detail="No podés especificar tema_id y caso_empresa_id a la vez.")
+
     if body.tema_id is not None:
         tema_resp = (
             supabase.table("tema")
@@ -123,15 +128,32 @@ async def crear_sesion(
         if not tema_resp.data:
             raise HTTPException(status_code=422, detail="El tema indicado no existe.")
 
+    if body.caso_empresa_id is not None:
+        caso_resp = (
+            supabase.table("caso_empresa")
+            .select("id, usuario_id")
+            .eq("id", body.caso_empresa_id)
+            .single()
+            .execute()
+        )
+        if not caso_resp.data:
+            raise HTTPException(status_code=422, detail="El caso de empresa indicado no existe.")
+        if caso_resp.data["usuario_id"] != user_id:
+            raise HTTPException(status_code=403, detail="No tenés acceso a ese caso de empresa.")
+
     sesion_id = str(uuid.uuid4())
-    resp = supabase.table("sesion_chat").insert(
-        {"id": sesion_id, "usuario_id": user_id, "tema_id": body.tema_id}
-    ).execute()
+    resp = supabase.table("sesion_chat").insert({
+        "id": sesion_id,
+        "usuario_id": user_id,
+        "tema_id": body.tema_id,
+        "caso_empresa_id": body.caso_empresa_id,
+    }).execute()
 
     sesion = resp.data[0]
     return CrearSesionResponse(
         sesion_id=sesion["id"],
         tema_id=sesion["tema_id"],
+        caso_empresa_id=sesion.get("caso_empresa_id"),
         iniciada_en=sesion["iniciada_en"],
     )
 
@@ -156,6 +178,20 @@ async def enviar_mensaje(
     # Verificar que la sesión pertenece al usuario
     sesion = _verificar_sesion_propia(sesion_id, user_id)
     tema_id: str | None = sesion["tema_id"]
+    caso_empresa_id: str | None = sesion.get("caso_empresa_id")
+
+    # Si es sesión de caso de empresa, resolver el documento_id del caso
+    documento_caso_id: str | None = None
+    if caso_empresa_id:
+        caso_resp = (
+            supabase.table("caso_empresa")
+            .select("documento_id")
+            .eq("id", caso_empresa_id)
+            .single()
+            .execute()
+        )
+        if caso_resp.data:
+            documento_caso_id = caso_resp.data.get("documento_id")
 
     # Cargar historial previo de la sesión
     historial = _cargar_historial(sesion_id)
@@ -166,6 +202,7 @@ async def enviar_mensaje(
             mensaje=body.contenido.strip(),
             tema_id=tema_id,
             historial=historial,
+            documento_caso_id=documento_caso_id,
         )
     except LLMError as e:
         logger.error("LLMError en sesion %s: %s", sesion_id, e)
@@ -210,7 +247,7 @@ async def listar_sesiones(
 ):
     q = (
         supabase.table("sesion_chat")
-        .select("id, tema_id, iniciada_en, archivada")
+        .select("id, tema_id, caso_empresa_id, iniciada_en, archivada")
         .eq("usuario_id", user_id)
     )
     if eliminadas:
@@ -222,6 +259,7 @@ async def listar_sesiones(
         SesionOut(
             id=s["id"],
             tema_id=s["tema_id"],
+            caso_empresa_id=s.get("caso_empresa_id"),
             iniciada_en=s["iniciada_en"],
             archivada=s.get("archivada", False),
         )

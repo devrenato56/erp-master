@@ -90,6 +90,70 @@ def recuperar_contexto(
     return chunks
 
 
+def recuperar_contexto_caso(
+    query: str,
+    documento_id: str,
+    top_k: int = 5,
+    umbral: float = UMBRAL_SIMILITUD,
+) -> list[ChunkRecuperado]:
+    """
+    Recupera contexto combinado para el chat de un caso de empresa:
+    - Busca en el documento específico del caso (sin filtro de moderación).
+    - Busca en el corpus general aprobado (igual que recuperar_contexto).
+    - Fusiona resultados deduplicando por id, priorizando chunks del documento del caso.
+
+    El usuario definió que el chat de un caso usa el documento subido + toda la
+    base de conocimiento, relacionando el caso concreto con el saber general.
+    """
+    vector = generar_embedding(query)
+
+    # 1. Chunks del documento específico del caso (sin filtro de estado_moderacion)
+    chunks_caso: list[ChunkRecuperado] = []
+    try:
+        resp_caso = supabase.rpc(
+            "match_chunks_by_documento",
+            {
+                "query_embedding": vector,
+                "p_documento_id": documento_id,
+                "match_threshold": max(umbral - 0.10, 0.20),  # umbral más bajo para el doc propio
+                "match_count": top_k,
+            },
+        ).execute()
+        chunks_caso = [
+            ChunkRecuperado(
+                id=row["id"],
+                documento_id=row["documento_id"],
+                contenido=row["contenido"],
+                orden=row["orden"],
+                similitud=float(row["similarity"]),
+            )
+            for row in (resp_caso.data or [])
+        ]
+    except Exception as e:
+        logger.error("Error buscando en documento del caso %s: %s", documento_id, e)
+
+    # 2. Corpus general aprobado
+    chunks_generales = recuperar_contexto(query, tema_id=None, top_k=top_k, umbral=umbral)
+
+    # 3. Fusión — los chunks del caso van primero (mayor prioridad en el contexto)
+    vistos: set[str] = set()
+    resultado: list[ChunkRecuperado] = []
+    for c in chunks_caso:
+        if c.id not in vistos:
+            resultado.append(c)
+            vistos.add(c.id)
+    for c in chunks_generales:
+        if c.id not in vistos:
+            resultado.append(c)
+            vistos.add(c.id)
+
+    logger.info(
+        "Retriever caso: documento=%s → %d chunks (caso=%d, general=%d)",
+        documento_id, len(resultado), len(chunks_caso), len(chunks_generales),
+    )
+    return resultado
+
+
 def construir_contexto_texto(chunks: list[ChunkRecuperado], max_chars: int = 6000) -> str:
     """
     Concatena los chunks recuperados en un bloque de texto para el prompt.

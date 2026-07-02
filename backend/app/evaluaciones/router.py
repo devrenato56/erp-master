@@ -10,6 +10,7 @@ from app.core.supabase_client import supabase
 from app.core.llm_provider import LLMError
 from app.evaluaciones.service import (
     generar_evaluacion,
+    generar_evaluacion_modulo,
     corregir_automatica,
     calificar_abierta,
     calcular_puntaje_total,
@@ -57,6 +58,10 @@ def _get_preguntas(evaluacion_id: str) -> list[dict]:
 class GenerarEvaluacionRequest(BaseModel):
     tema_id: str
     n_preguntas: int = 8
+
+
+class GenerarEvaluacionModuloRequest(BaseModel):
+    n_preguntas: int = 12
 
 
 class PreguntaOut(BaseModel):
@@ -177,6 +182,98 @@ async def generar(
 
 
 # ---------------------------------------------------------------------------
+# POST /evaluaciones/modulo/{modulo_id}/generar — evaluación final de módulo
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/modulo/{modulo_id}/generar",
+    status_code=status.HTTP_201_CREATED,
+    response_model=GenerarEvaluacionResponse,
+)
+async def generar_modulo(
+    modulo_id: str,
+    body: GenerarEvaluacionModuloRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    logger.info(
+        "[EVAL] POST /modulo/%s/generar — n_preguntas=%d user=%s",
+        modulo_id, body.n_preguntas, user_id,
+    )
+
+    # Verificar que el módulo existe
+    mod_resp = supabase.table("modulo").select("id, nombre").eq("id", modulo_id).single().execute()
+    if not mod_resp.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Módulo no encontrado.")
+
+    if not (8 <= body.n_preguntas <= 15):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "n_preguntas debe estar entre 8 y 15.")
+
+    # RF-32: Verificar que el usuario completó al menos una evaluación por cada
+    # sub-tema con orden >= 1 que ya tenga evaluaciones generadas.
+    subtemas_resp = (
+        supabase.table("tema")
+        .select("id, nombre")
+        .eq("modulo_id", modulo_id)
+        .gte("orden", 1)
+        .execute()
+    )
+    subtemas = subtemas_resp.data or []
+
+    for subtema in subtemas:
+        evals_resp = (
+            supabase.table("evaluacion")
+            .select("id")
+            .eq("tema_id", subtema["id"])
+            .eq("nivel", "tema")
+            .execute()
+        )
+        eval_ids = [e["id"] for e in (evals_resp.data or [])]
+        if not eval_ids:
+            continue  # sub-tema sin evaluaciones aún → no bloquear
+
+        intentos_resp = (
+            supabase.table("intento_evaluacion")
+            .select("id")
+            .eq("usuario_id", user_id)
+            .in_("evaluacion_id", eval_ids)
+            .filter("completado_en", "not.is", "null")
+            .limit(1)
+            .execute()
+        )
+        if not intentos_resp.data:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Debés completar al menos una evaluación del sub-tema "
+                f'"{subtema["nombre"]}" antes de acceder al examen final del módulo.',
+            )
+
+    try:
+        ev = generar_evaluacion_modulo(modulo_id, n_preguntas=body.n_preguntas)
+    except RuntimeError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    except ValueError as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Error generando preguntas: {e}")
+    except LLMError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"El asistente no está disponible: {e}")
+
+    preguntas_out = [
+        PreguntaOut(
+            id=p["id"],
+            tipo=p["tipo"],
+            enunciado=p["enunciado"],
+            opciones=p.get("opciones"),
+        )
+        for p in ev.preguntas
+    ]
+
+    return GenerarEvaluacionResponse(
+        evaluacion_id=ev.evaluacion_id,
+        titulo=ev.titulo,
+        preguntas=preguntas_out,
+    )
+
+
+# ---------------------------------------------------------------------------
 # POST /evaluaciones/{evaluacion_id}/intentos
 # ---------------------------------------------------------------------------
 
@@ -229,8 +326,16 @@ async def enviar_respuestas(
     pregunta_map = {p["id"]: p for p in preguntas}
 
     # Contexto del tema para calificación de abiertas (una sola carga)
-    eval_resp = supabase.table("evaluacion").select("tema_id").eq("id", evaluacion_id).single().execute()
+    eval_resp = (
+        supabase.table("evaluacion")
+        .select("tema_id, nivel, modulo_id")
+        .eq("id", evaluacion_id)
+        .single()
+        .execute()
+    )
     tema_id = eval_resp.data["tema_id"] if eval_resp.data else None
+    nivel_eval = (eval_resp.data or {}).get("nivel", "tema")
+    modulo_id_eval = (eval_resp.data or {}).get("modulo_id")
     contexto_tema = ""
     if tema_id:
         chunks = recuperar_contexto(
@@ -288,6 +393,22 @@ async def enviar_respuestas(
         "puntaje_total": consolidado.promedio,
         "completado_en": "now()",
     }).eq("id", intento_id).execute()
+
+    # RF-33: Si es evaluación final de módulo y el usuario aprueba → marcar progreso
+    if nivel_eval == "modulo" and modulo_id_eval and consolidado.aprobado:
+        supabase.table("progreso_modulo").upsert(
+            {
+                "usuario_id": user_id,
+                "modulo_id": modulo_id_eval,
+                "completado": True,
+                "completado_en": "now()",
+            },
+            on_conflict="usuario_id,modulo_id",
+        ).execute()
+        logger.info(
+            "[EVAL] Módulo %s marcado como completado para user %s (nota=%.1f/20)",
+            modulo_id_eval, user_id, consolidado.sobre_20,
+        )
 
     return ResultadoIntentoResponse(
         intento_id=intento_id,

@@ -12,6 +12,8 @@ from app.temas.router import router as temas_router
 from app.chat.router import router as chat_router
 from app.evaluaciones.router import router as evaluaciones_router
 from app.perfil.router import router as perfil_router
+from app.modulos.router import router as modulos_router
+from app.casos_empresa.router import router as casos_empresa_router
 
 # Logging centralizado: formato legible + nivel INFO por defecto.
 # Uvicorn ya captura stdout, así que esto se ve en los logs de Render/Railway.
@@ -63,6 +65,8 @@ app.add_middleware(
 
 app.include_router(documentos_router)
 app.include_router(temas_router)
+app.include_router(modulos_router)
+app.include_router(casos_empresa_router)
 app.include_router(chat_router)
 app.include_router(evaluaciones_router)
 app.include_router(perfil_router)
