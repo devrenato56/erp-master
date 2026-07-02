@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # CORS: orígenes permitidos separados por coma (para deploy)
     cors_origins: str = "http://localhost:3000"
 
+    # Admin: clave secreta para endpoints protegidos (seed, etc.)
+    admin_secret: str = ""
+
     # OCR/visión para extracción de PDFs (Google AI Studio)
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"

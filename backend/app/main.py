@@ -15,6 +15,7 @@ from app.evaluaciones.router import router as evaluaciones_router
 from app.perfil.router import router as perfil_router
 from app.modulos.router import router as modulos_router
 from app.casos_empresa.router import router as casos_empresa_router
+from app.admin.endpoints import router as admin_router
 
 # Logging centralizado: formato legible + nivel INFO por defecto.
 # Uvicorn ya captura stdout, así que esto se ve en los logs de Render/Railway.
@@ -71,6 +72,7 @@ app.include_router(casos_empresa_router)
 app.include_router(chat_router)
 app.include_router(evaluaciones_router)
 app.include_router(perfil_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")
