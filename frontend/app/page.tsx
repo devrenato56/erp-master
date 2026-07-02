@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MessageSquare,
@@ -22,58 +22,65 @@ import {
   X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
-import logoVerde from "@/assets/CHAT-ERP-LOGO-VERDE.png";
-import logoBlanco from "@/assets/CHAT-ERP-LOGO-BLANCO.png";
+import logoVerde from "@/assets/logos/CHAT-ERP-LOGO-VERDE.png";
+import logoBlanco from "@/assets/logos/CHAT-ERP-LOGO-BLANCO.png";
+import imgDared from "@/assets/logos/members/dared-flores/Dared-Flores.jpeg";
+import imgEvelyn from "@/assets/logos/members/evelyn-ventura/Evelyn-Ventura.jpeg";
+import imgJoseCarlos from "@/assets/logos/members/josecarlos-valenzuela/Josecarlos-Valenzuela.jpg";
+import imgJuan from "@/assets/logos/members/juan-pintado/Juan-Pintado.jpeg";
+import imgKate from "@/assets/logos/members/kate-llantoy/Kate-Llantoy.jpeg";
+import imgLady from "@/assets/logos/members/lady-torres/Lady-Torres.jpeg";
+import imgRubi from "@/assets/logos/members/rubi-quispe/Rubí-Quispe.jpeg";
 
 // ── Team ─────────────────────────────────────────────────────────────────────
 const TEAM = [
   {
-    nombre: "Integrante 1",
+    nombre: "Dared Flores",
     rol: "Fullstack Developer & Project Lead",
-    descripcion: "Responsable de la arquitectura general y la integración de los módulos del sistema ERP.",
-    iniciales: "I1",
+    foto: imgDared,
+    linkedin: "https://www.linkedin.com/in/flores-miranda/",
     color: "#4ADE80",
   },
   {
-    nombre: "Integrante 2",
+    nombre: "Evelyn Ventura",
     rol: "Backend Engineer",
-    descripcion: "Desarrolló los servicios de API REST, autenticación JWT y la capa de acceso a datos con Supabase.",
-    iniciales: "I2",
+    foto: imgEvelyn,
+    linkedin: "https://www.linkedin.com/in/evelyn-janela-ventura-perez-51854241b",
     color: "#60A5FA",
   },
   {
-    nombre: "Integrante 3",
+    nombre: "Josecarlos Valenzuela",
     rol: "Frontend Developer & UX",
-    descripcion: "Diseñó e implementó la interfaz de usuario con Next.js, asegurando una experiencia fluida y consistente.",
-    iniciales: "I3",
+    foto: imgJoseCarlos,
+    linkedin: "https://www.linkedin.com/in/josecarlos-valenzuela-arroyo",
     color: "#F472B6",
   },
   {
-    nombre: "Integrante 4",
+    nombre: "Juan Pintado",
     rol: "ML Engineer & Embeddings",
-    descripcion: "Implementó el pipeline de embeddings con sentence-transformers y la búsqueda semántica con pgvector.",
-    iniciales: "I4",
+    foto: imgJuan,
+    linkedin: "https://www.linkedin.com/in/juan-andres-pintado-l%C3%B3pez-597826306",
     color: "#FBBF24",
   },
   {
-    nombre: "Integrante 5",
+    nombre: "Kate Llantoy",
     rol: "Data Engineer",
-    descripcion: "Diseñó el esquema de base de datos PostgreSQL, las políticas RLS y el proceso de migración de datos.",
-    iniciales: "I5",
+    foto: imgKate,
+    linkedin: "https://www.linkedin.com/in/kate-llantoy",
     color: "#A78BFA",
   },
   {
-    nombre: "Integrante 6",
+    nombre: "Lady Torres",
     rol: "DevOps & Infrastructure",
-    descripcion: "Configuró el entorno de despliegue, variables de entorno y la integración entre servicios.",
-    iniciales: "I6",
+    foto: imgLady,
+    linkedin: "https://www.linkedin.com/in/lady-torres-vera-96b4853a2/",
     color: "#34D399",
   },
   {
-    nombre: "Integrante 7",
+    nombre: "Rubí Quispe",
     rol: "ERP Specialist & Content",
-    descripcion: "Aportó el conocimiento de dominio ERP y estructuró los contenidos educativos de los 5 módulos.",
-    iniciales: "I7",
+    foto: imgRubi,
+    linkedin: "https://www.linkedin.com/in/rubi-quispe-sierra/",
     color: "#FB923C",
   },
 ];
@@ -158,75 +165,86 @@ function UniBadge() {
   );
 }
 
-// ── Team Card (hack0dev style) ────────────────────────────────────────────────
+// ── Team Card ─────────────────────────────────────────────────────────────────
 function TeamCard({ miembro }: { miembro: (typeof TEAM)[number] }) {
   const [hover, setHover] = useState(false);
   return (
-    <div
+    <a
+      href={miembro.linkedin}
+      target="_blank"
+      rel="noopener noreferrer"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
+        display: "block",
         borderRadius: "var(--radius-md)",
         overflow: "hidden",
-        border: `1px solid ${hover ? "var(--border-strong)" : "var(--border)"}`,
-        backgroundColor: hover ? "var(--bg-surface-hover)" : "var(--bg-surface)",
-        transition: "border-color 0.2s, background-color 0.2s, transform 0.2s",
-        transform: hover ? "translateY(-3px)" : "translateY(0)",
-        cursor: "default",
+        border: `1px solid ${hover ? miembro.color + "55" : "var(--border)"}`,
+        backgroundColor: "var(--bg-surface)",
+        transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s",
+        transform: hover ? "translateY(-5px)" : "translateY(0)",
+        boxShadow: hover ? `0 8px 24px ${miembro.color}18` : "none",
+        cursor: "pointer",
+        textDecoration: "none",
       }}
     >
-      {/* Photo placeholder area */}
+      {/* Photo */}
       <div
         style={{
-          height: 180,
-          backgroundColor: "var(--bg-base)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
           position: "relative",
+          width: "100%",
+          paddingBottom: "120%",
           overflow: "hidden",
+          backgroundColor: "var(--bg-base)",
         }}
       >
+        <Image
+          src={miembro.foto}
+          alt={miembro.nombre}
+          fill
+          sizes="(max-width: 768px) 50vw, 200px"
+          style={{ objectFit: "cover", objectPosition: "top center" }}
+        />
+        {/* LinkedIn badge */}
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            background: `radial-gradient(circle at 50% 70%, ${miembro.color}20 0%, transparent 70%)`,
-          }}
-        />
-        <div
-          style={{
-            width: 80,
-            height: 80,
+            bottom: 10,
+            right: 10,
+            width: 30,
+            height: 30,
             borderRadius: "50%",
-            backgroundColor: `${miembro.color}15`,
-            border: `2px solid ${miembro.color}40`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            position: "relative",
-            zIndex: 1,
+            overflow: "hidden",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
+            border: "1.5px solid rgba(255,255,255,0.25)",
           }}
         >
-          <span style={{ fontSize: 22, fontWeight: 700, color: miembro.color, letterSpacing: "-0.02em" }}>
-            {miembro.iniciales}
-          </span>
+          <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="15" cy="15" r="15" fill="#0A66C2"/>
+            {/* i — dot */}
+            <circle cx="10.5" cy="10" r="1.8" fill="white"/>
+            {/* i — stem */}
+            <rect x="9" y="13" width="3" height="9" rx="0.6" fill="white"/>
+            {/* n */}
+            <rect x="14" y="13" width="2.8" height="9" rx="0.6" fill="white"/>
+            <path d="M16.8 15.8 C16.8 14.1 17.8 12.7 19.7 12.7 C21.5 12.7 22.4 14 22.4 15.8 L22.4 22 L19.6 22 L19.6 16.2 C19.6 15.4 19.2 14.9 18.5 14.9 C17.8 14.9 17.4 15.4 17.4 16.2 L17.4 22 L14.6 22 L14.6 13 L16.8 13 Z" fill="white"/>
+          </svg>
         </div>
       </div>
 
       {/* Info */}
-      <div style={{ padding: "16px 16px 20px" }}>
-        <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4, letterSpacing: "-0.01em" }}>
+      <div style={{ padding: "14px 14px 18px" }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3, letterSpacing: "-0.01em" }}>
           {miembro.nombre}
         </p>
-        <p style={{ fontSize: 11, fontWeight: 500, color: miembro.color, marginBottom: 10, letterSpacing: "0.02em" }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: miembro.color, marginBottom: 5, letterSpacing: "0.02em" }}>
           {miembro.rol}
         </p>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-          {miembro.descripcion}
+        <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          Ingeniería Industrial · UNI
         </p>
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -259,6 +277,8 @@ function DiferenciadoreCard({ item }: { item: (typeof DIFERENCIADORES)[number] }
 export default function LandingPage() {
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getSupabase()
@@ -266,6 +286,14 @@ export default function LandingPage() {
       .then(({ data: { session } }) => {
         if (session) router.replace("/dashboard");
       });
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (overlayRef.current) {
+        overlayRef.current.style.background = `radial-gradient(700px circle at ${e.clientX}px ${e.clientY}px, rgba(74,222,128,0.06) 0%, transparent 70%)`;
+      }
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [router]);
 
   function scrollTo(id: string) {
@@ -285,8 +313,20 @@ export default function LandingPage() {
         color: "var(--text-primary)",
         minHeight: "100vh",
         animation: "landingFadeIn 0.4s ease both",
+        position: "relative",
       }}
     >
+      {/* Mouse-tracking glow overlay */}
+      <div
+        ref={overlayRef}
+        aria-hidden
+        style={{
+          position: "fixed",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
       {/* ── NAVBAR ── */}
       <nav
         style={{
@@ -482,6 +522,34 @@ export default function LandingPage() {
               pointerEvents: "none",
             }}
           />
+
+          {/* Ambient glow orbs */}
+          <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+            <div style={{
+              position: "absolute", top: "10%", left: "15%",
+              width: 500, height: 500,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(74,222,128,0.07) 0%, transparent 70%)",
+              animation: "orbFloat1 12s ease-in-out infinite",
+              filter: "blur(40px)",
+            }} />
+            <div style={{
+              position: "absolute", top: "40%", right: "10%",
+              width: 400, height: 400,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(74,222,128,0.05) 0%, transparent 70%)",
+              animation: "orbFloat2 16s ease-in-out infinite",
+              filter: "blur(50px)",
+            }} />
+            <div style={{
+              position: "absolute", bottom: "5%", left: "40%",
+              width: 350, height: 350,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(74,222,128,0.04) 0%, transparent 70%)",
+              animation: "orbFloat3 20s ease-in-out infinite",
+              filter: "blur(45px)",
+            }} />
+          </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>
             <div style={{ width: 20, height: 3, backgroundColor: "var(--accent)", borderRadius: 2 }} />
@@ -924,16 +992,74 @@ export default function LandingPage() {
             la capacitación en sistemas ERP mediante inteligencia artificial.
           </p>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(196px, 1fr))",
-              gap: 14,
-            }}
-          >
-            {TEAM.map((m) => (
-              <TeamCard key={m.nombre} miembro={m} />
+          {/* Carousel nav buttons */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 20 }}>
+            {(["←", "→"] as const).map((dir) => (
+              <button
+                key={dir}
+                onClick={() =>
+                  carouselRef.current?.scrollBy({ left: dir === "←" ? -252 : 252, behavior: "smooth" })
+                }
+                style={{
+                  width: 36, height: 36,
+                  borderRadius: "50%",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "var(--bg-surface)",
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16,
+                  transition: "border-color 0.15s, color 0.15s, background-color 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-strong)";
+                  e.currentTarget.style.color = "var(--text-primary)";
+                  e.currentTarget.style.backgroundColor = "var(--bg-surface-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.color = "var(--text-secondary)";
+                  e.currentTarget.style.backgroundColor = "var(--bg-surface)";
+                }}
+              >
+                {dir}
+              </button>
             ))}
+          </div>
+
+          {/* Carousel track */}
+          <div style={{ position: "relative" }}>
+            <div
+              ref={carouselRef}
+              style={{
+                display: "flex",
+                gap: 16,
+                overflowX: "auto",
+                scrollbarWidth: "none",
+                scrollSnapType: "x mandatory",
+                paddingBottom: 8,
+              }}
+            >
+              {TEAM.map((m) => (
+                <div
+                  key={m.nombre}
+                  style={{ flex: "0 0 220px", scrollSnapAlign: "start" }}
+                >
+                  <TeamCard miembro={m} />
+                </div>
+              ))}
+            </div>
+            {/* Edge fades */}
+            <div aria-hidden style={{
+              position: "absolute", left: 0, top: 0, bottom: 8, width: 40,
+              background: "linear-gradient(to right, #0A0A0A, transparent)",
+              pointerEvents: "none",
+            }} />
+            <div aria-hidden style={{
+              position: "absolute", right: 0, top: 0, bottom: 8, width: 40,
+              background: "linear-gradient(to left, #0A0A0A, transparent)",
+              pointerEvents: "none",
+            }} />
           </div>
         </div>
       </section>
@@ -1246,6 +1372,22 @@ export default function LandingPage() {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes orbFloat1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33%       { transform: translate(50px, -40px) scale(1.06); }
+          66%       { transform: translate(-30px, 25px) scale(0.95); }
+        }
+        @keyframes orbFloat2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          40%       { transform: translate(-60px, 30px) scale(1.08); }
+          70%       { transform: translate(40px, -20px) scale(0.93); }
+        }
+        @keyframes orbFloat3 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50%       { transform: translate(35px, 50px) scale(1.04); }
+        }
+        div[style*="scrollbarWidth"] { scrollbar-width: none; }
+        div[style*="scrollbarWidth"]::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
   );

@@ -1,0 +1,1 @@
+https://www.linkedin.com/in/lady-torres-vera-96b4853a2/?skipRedirect=true

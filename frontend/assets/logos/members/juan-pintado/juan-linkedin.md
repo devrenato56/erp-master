@@ -1,0 +1,1 @@
+https://www.linkedin.com/in/juan-andres-pintado-lópez-597826306
