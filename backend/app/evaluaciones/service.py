@@ -397,29 +397,37 @@ def generar_evaluacion(
                 todos_los_chunks.append(c)
                 vistos.add(c.id)
 
-    # Fallback: si no hay chunks específicos del tema, usar corpus general
+    # Fallback 1: si no hay chunks del tema, buscar en corpus general
     if not todos_los_chunks:
         logger.warning("[EVAL] Sin chunks para tema=%s — usando corpus general", tema_id)
         fallback = recuperar_contexto(
-            "sistemas ERP implementación gestión empresarial",
-            tema_id=None, top_k=6, umbral=0.20,
+            "sistemas ERP implementación gestión empresarial beneficios riesgos",
+            tema_id=None, top_k=6, umbral=0.15, user_id=user_id,
         )
         todos_los_chunks = fallback
 
+    # Fallback 2: sin ningún contenido indexado, usar nombre y descripción del tema
     if not todos_los_chunks:
-        raise RuntimeError(
-            f"No hay contenido indexado disponible para generar la evaluación. "
-            "Verificá que se haya ejecutado el seed de contenido."
-        )
-
-    # Limitar a los top 8 chunks para no exceder el contexto del LLM
-    todos_los_chunks.sort(key=lambda c: c.similitud, reverse=True)
-    chunks_usados = todos_los_chunks[:8]
-    contexto = construir_contexto_texto(chunks_usados, max_chars=5000)
+        logger.warning("[EVAL] Sin contenido indexado — generando desde descripción del tema=%s", tema_id)
+        tema_info = supabase.table("tema").select("nombre, descripcion").eq("id", tema_id).single().execute()
+        nombre_fb = (tema_info.data or {}).get("nombre") or "sistemas ERP"
+        desc_fb = (tema_info.data or {}).get("descripcion") or ""
+        contexto = (
+            f"Tema: {nombre_fb}\n\n{desc_fb}\n\n"
+            "Contexto adicional: Este tema forma parte de un curso de capacitación en sistemas ERP "
+            "(Enterprise Resource Planning). Las preguntas deben evaluar conceptos clave relacionados "
+            "con la implementación, beneficios, riesgos y gestión de sistemas ERP en organizaciones."
+        ).strip()
+        chunks_usados_n = 0
+    else:
+        todos_los_chunks.sort(key=lambda c: c.similitud, reverse=True)
+        chunks_usados = todos_los_chunks[:8]
+        contexto = construir_contexto_texto(chunks_usados, max_chars=5000)
+        chunks_usados_n = len(chunks_usados)
 
     logger.info(
         "[EVAL] Generando evaluación: tema=%s n=%d chunks_usados=%d",
-        tema_id, n_preguntas, len(chunks_usados),
+        tema_id, n_preguntas, chunks_usados_n,
     )
 
     # --- 2. Llamar al LLM (con 1 reintento si JSON malformado) ---

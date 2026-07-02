@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { getSupabase } from "@/lib/supabase/client";
+import logoVerde from "@/assets/logos/CHAT-ERP-LOGO-VERDE.png";
 
 export default function RegistroPage() {
   const router = useRouter();
@@ -12,6 +14,7 @@ export default function RegistroPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,8 +30,17 @@ export default function RegistroPage() {
     setLoading(false);
 
     if (signUpError) {
-      if (signUpError.message.includes("already registered")) {
+      const msg = signUpError.message?.toLowerCase() ?? "";
+      const status = (signUpError as { status?: number }).status;
+
+      if (status === 429 || msg.includes("rate limit") || msg.includes("too many")) {
+        setError("Demasiados intentos de registro. Esperá unos minutos e intentá de nuevo.");
+      } else if (msg.includes("already registered") || msg.includes("already been registered")) {
         setError("Ya existe una cuenta con ese correo electrónico.");
+      } else if (msg.includes("password") && msg.includes("characters")) {
+        setError("La contraseña debe tener al menos 6 caracteres.");
+      } else if (msg.includes("email")) {
+        setError("El correo electrónico no es válido.");
       } else {
         setError("No se pudo crear la cuenta. Verificá los datos e intentá de nuevo.");
       }
@@ -42,40 +54,86 @@ export default function RegistroPage() {
     <div
       style={{
         width: "100%",
-        maxWidth: "400px",
+        maxWidth: "420px",
         backgroundColor: "var(--bg-surface)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
-        padding: "40px 32px",
+        padding: "40px 36px 36px",
+        position: "relative",
+        zIndex: 1,
       }}
     >
+      {/* Logo + brand */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "32px" }}>
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: "var(--radius-md)",
+            backgroundColor: "var(--accent-muted)",
+            border: "1px solid rgba(74,222,128,0.25)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: "12px",
+          }}
+        >
+          <Image src={logoVerde} alt="ChatERP" height={32} style={{ objectFit: "contain" }} />
+        </div>
+        <span
+          style={{
+            fontSize: "13px",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--accent)",
+          }}
+        >
+          ChatERP
+        </span>
+      </div>
+
+      {/* Title */}
       <h1
         style={{
-          fontSize: "22px",
-          fontWeight: 600,
+          fontSize: "20px",
+          fontWeight: 700,
           color: "var(--text-primary)",
-          marginBottom: "8px",
+          marginBottom: "6px",
+          letterSpacing: "-0.02em",
         }}
       >
         Crear cuenta
       </h1>
-      <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "32px" }}>
-        Ingresá tus datos para comenzar.
+      <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "28px", lineHeight: 1.6 }}>
+        Completá tus datos para comenzar a aprender ERP.
       </p>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        <Field label="Nombre">
+      <div style={{ height: "1px", backgroundColor: "var(--border)", marginBottom: "28px" }} />
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+        {/* Nombre */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Nombre
+          </label>
           <input
             type="text"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            placeholder="Tu nombre"
+            placeholder="Tu nombre completo"
             required
             style={inputStyle}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(74,222,128,0.5)"; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
           />
-        </Field>
+        </div>
 
-        <Field label="Correo electrónico">
+        {/* Email */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Correo electrónico
+          </label>
           <input
             type="email"
             value={email}
@@ -83,47 +141,99 @@ export default function RegistroPage() {
             placeholder="tu@correo.com"
             required
             style={inputStyle}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(74,222,128,0.5)"; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
           />
-        </Field>
+        </div>
 
-        <Field label="Contraseña">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mínimo 6 caracteres"
-            minLength={6}
-            required
-            style={inputStyle}
-          />
-        </Field>
+        {/* Contraseña */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Contraseña
+          </label>
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPass ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              minLength={6}
+              required
+              style={{ ...inputStyle, paddingRight: "44px" }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(74,222,128,0.5)"; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((v) => !v)}
+              style={{
+                position: "absolute",
+                right: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--text-muted)",
+                fontSize: "11px",
+                fontWeight: 500,
+                padding: 0,
+                letterSpacing: "0.02em",
+              }}
+            >
+              {showPass ? "Ocultar" : "Ver"}
+            </button>
+          </div>
+        </div>
 
         {error && (
-          <p style={{ fontSize: "13px", color: "var(--danger)" }}>{error}</p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "8px",
+              padding: "10px 12px",
+              backgroundColor: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.2)",
+              borderRadius: "var(--radius-sm)",
+            }}
+          >
+            <span style={{ fontSize: "13px", color: "var(--danger)", lineHeight: 1.5 }}>{error}</span>
+          </div>
         )}
 
-        <button type="submit" disabled={loading} style={loading ? { ...primaryBtn, opacity: 0.6, cursor: "not-allowed" } : primaryBtn}>
-          {loading ? "Creando cuenta..." : "Crear cuenta"}
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            backgroundColor: "var(--accent)",
+            color: "var(--bg-base)",
+            border: "none",
+            borderRadius: "var(--radius-sm)",
+            padding: "11px 16px",
+            fontSize: "14px",
+            fontWeight: 600,
+            cursor: loading ? "not-allowed" : "pointer",
+            width: "100%",
+            marginTop: "4px",
+            opacity: loading ? 0.7 : 1,
+            transition: "opacity 0.15s, background-color 0.15s",
+            letterSpacing: "-0.01em",
+          }}
+          onMouseEnter={(e) => { if (!loading) e.currentTarget.style.backgroundColor = "var(--accent-hover)"; }}
+          onMouseLeave={(e) => { if (!loading) e.currentTarget.style.backgroundColor = "var(--accent)"; }}
+        >
+          {loading ? "Creando cuenta…" : "Crear cuenta →"}
         </button>
       </form>
 
-      <p style={{ marginTop: "24px", fontSize: "13px", color: "var(--text-secondary)", textAlign: "center" }}>
+      <div style={{ marginTop: "24px", height: "1px", backgroundColor: "var(--border)" }} />
+      <p style={{ marginTop: "20px", fontSize: "13px", color: "var(--text-muted)", textAlign: "center" }}>
         ¿Ya tenés cuenta?{" "}
-        <Link href="/login" style={{ color: "var(--accent)", textDecoration: "none" }}>
+        <Link href="/login" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>
           Iniciá sesión
         </Link>
       </p>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-      <label style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)" }}>
-        {label}
-      </label>
-      {children}
     </div>
   );
 }
@@ -137,17 +247,5 @@ const inputStyle: React.CSSProperties = {
   color: "var(--text-primary)",
   outline: "none",
   width: "100%",
-};
-
-const primaryBtn: React.CSSProperties = {
-  backgroundColor: "var(--accent)",
-  color: "var(--bg-base)",
-  border: "none",
-  borderRadius: "var(--radius-sm)",
-  padding: "10px 16px",
-  fontSize: "14px",
-  fontWeight: 500,
-  cursor: "pointer",
-  width: "100%",
-  marginTop: "8px",
+  transition: "border-color 0.15s",
 };
